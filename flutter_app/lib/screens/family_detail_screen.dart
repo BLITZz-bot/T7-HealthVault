@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../services/local_db_service.dart';
+import 'member_detail_screen.dart';
 
 class FamilyDetailScreen extends StatefulWidget {
   final Map<String, dynamic> family;
@@ -22,7 +23,7 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
 
   void _refreshMembers() {
     setState(() {
-      _membersFuture = ApiService.getMembers(widget.token).then((allMembers) {
+      _membersFuture = LocalDbService.getMembers(widget.token).then((allMembers) {
         // Filter locally by family id
         return allMembers.where((m) => m['family'].toString() == widget.family['id'].toString()).toList();
       });
@@ -71,7 +72,7 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
               onPressed: () async {
                 if (nameCtrl.text.isNotEmpty && ageCtrl.text.isNotEmpty && relCtrl.text.isNotEmpty) {
                   final age = int.tryParse(ageCtrl.text) ?? 0;
-                  final ok = await ApiService.addMember(
+                  final ok = await LocalDbService.addMember(
                     widget.token,
                     widget.family['id'].toString(),
                     nameCtrl.text,
@@ -92,6 +93,14 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
         ),
       ),
     );
+  }
+
+  Color _flagColor(String? flag) {
+    switch (flag) {
+      case 'critical': return Colors.red;
+      case 'warning': return Colors.orange;
+      default: return Colors.green;
+    }
   }
 
   @override
@@ -136,9 +145,14 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
                   itemCount: members.length,
                   itemBuilder: (context, index) {
                     final member = members[index];
+                    final flag = member['current_flag'] as String?;
+                    final lastRecorded = member['last_recorded_at'] as String?;
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         leading: CircleAvatar(
                           backgroundColor: Colors.teal.shade100,
                           child: Icon(
@@ -146,15 +160,48 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
                             color: Colors.teal.shade800,
                           ),
                         ),
-                        title: Text(member['full_name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('Age: ${member['age']} | Rel: ${member['relationship_to_head']}'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.medical_services, color: Colors.indigo),
-                          tooltip: 'Health Records',
-                          onPressed: () {
-                            // TODO: Add Medical Records later
-                          },
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(member['full_name'], style: const TextStyle(fontWeight: FontWeight.bold))),
+                            if (flag != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: _flagColor(flag).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: _flagColor(flag).withOpacity(0.5)),
+                                ),
+                                child: Text(
+                                  flag.toUpperCase(),
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _flagColor(flag)),
+                                ),
+                              ),
+                          ],
                         ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Age: ${member['age']} | ${member['relationship_to_head']}'),
+                            if (lastRecorded != null)
+                              Text(
+                                'Last checked: ${_formatDate(lastRecorded)}',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                          ],
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MemberDetailScreen(
+                                member: member,
+                                token: widget.token,
+                              ),
+                            ),
+                          );
+                          _refreshMembers(); // Refresh on return to pick up any new records/flags
+                        },
                       ),
                     );
                   },
@@ -171,5 +218,14 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
         backgroundColor: const Color(0xFF00897B),
       ),
     );
+  }
+
+  String _formatDate(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {
+      return iso;
+    }
   }
 }

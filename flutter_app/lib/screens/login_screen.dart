@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../services/local_db_service.dart';
 import 'asha_home_screen.dart';
 import 'admin_dashboard.dart';
 
@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService.loginASHA(
+      final res = await LocalDbService.loginASHA(
         _nameController.text.trim(),
         _phoneController.text.trim(),
       );
@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService.loginAdmin(
+      final res = await LocalDbService.loginAdmin(
         _usernameController.text.trim(),
         _passwordController.text.trim(),
       );

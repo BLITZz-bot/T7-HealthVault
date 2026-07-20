@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../services/local_db_service.dart';
 import 'login_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -30,10 +30,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   void _refreshData() {
     setState(() {
-      _workersFuture = ApiService.getASHAWorkers(widget.token);
-      _areasFuture = ApiService.getAreas(widget.token);
-      _districtsFuture = ApiService.getDistricts(widget.token);
-      _statesFuture = ApiService.getStates(widget.token);
+      _workersFuture = LocalDbService.getASHAWorkers(widget.token);
+      _areasFuture = LocalDbService.getAreas(widget.token);
+      _districtsFuture = LocalDbService.getDistricts(widget.token);
+      _statesFuture = LocalDbService.getStates(widget.token);
     });
   }
 
@@ -53,9 +53,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // FIX: Use .then() not async/await before showDialog — avoids Windows !_debugDuringDeviceUpdate crash
   void _showAddWorkerDialog() {
     Future.wait([
-      ApiService.getStates(widget.token),
-      ApiService.getDistricts(widget.token),
-      ApiService.getAreas(widget.token),
+      LocalDbService.getStates(widget.token),
+      LocalDbService.getDistricts(widget.token),
+      LocalDbService.getAreas(widget.token),
     ]).then((results) {
       if (!mounted) return;
       final states = results[0];
@@ -214,7 +214,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (usernameCtrl.text.isNotEmpty && phoneCtrl.text.isNotEmpty && selectedStateId != null) {
-                    final ok = await ApiService.addASHAWorker(
+                    final ok = await LocalDbService.addASHAWorker(
                       token: widget.token,
                       username: usernameCtrl.text.trim(),
                       firstName: firstNameCtrl.text.trim(),
@@ -244,9 +244,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     void _showEditWorkerDialog(Map<String, dynamic> worker) {
     Future.wait([
-      ApiService.getStates(widget.token),
-      ApiService.getDistricts(widget.token),
-      ApiService.getAreas(widget.token),
+      LocalDbService.getStates(widget.token),
+      LocalDbService.getDistricts(widget.token),
+      LocalDbService.getAreas(widget.token),
     ]).then((results) {
       if (!mounted) return;
       final states = results[0];
@@ -412,7 +412,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (usernameCtrl.text.isNotEmpty && phoneCtrl.text.isNotEmpty && selectedStateId != null) {
-                    final ok = await ApiService.editASHAWorker(
+                    final ok = await LocalDbService.editASHAWorker(
                       token: widget.token,
                       userId: userId, // Pass the userId here
                       username: usernameCtrl.text.trim(),
@@ -444,8 +444,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   void _showAddAreaDialog() {
     Future.wait([
-      ApiService.getStates(widget.token),
-      ApiService.getDistricts(widget.token),
+      LocalDbService.getStates(widget.token),
+      LocalDbService.getDistricts(widget.token),
     ]).then((results) {
       if (!mounted) return;
       final states = results[0];
@@ -515,7 +515,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (selectedDistrictId != null && wardCtrl.text.isNotEmpty) {
-                    final ok = await ApiService.addArea(
+                    final ok = await LocalDbService.addArea(
                       widget.token, selectedDistrictId!,
                       blockCtrl.text.trim(), wardCtrl.text.trim(),
                     );
@@ -553,7 +553,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               if (stateCtrl.text.isNotEmpty) {
-                final ok = await ApiService.addState(widget.token, stateCtrl.text.trim());
+                final ok = await LocalDbService.addState(widget.token, stateCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -586,7 +586,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               if (stateCtrl.text.isNotEmpty) {
-                final ok = await ApiService.editState(widget.token, state['id'].toString(), stateCtrl.text.trim());
+                final ok = await LocalDbService.editState(widget.token, state['id'].toString(), stateCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -619,7 +619,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               if (districtCtrl.text.isNotEmpty) {
-                final ok = await ApiService.addDistrict(widget.token, stateId, districtCtrl.text.trim());
+                final ok = await LocalDbService.addDistrict(widget.token, stateId, districtCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -638,7 +638,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   void _showAddDistrictTopLevelDialog() {
     Future.wait([
-      ApiService.getStates(widget.token),
+      LocalDbService.getStates(widget.token),
     ]).then((results) {
       if (!mounted) return;
       final states = results[0];
@@ -682,7 +682,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (districtCtrl.text.isNotEmpty) {
-                    final ok = await ApiService.addDistrict(
+                    final ok = await LocalDbService.addDistrict(
                       widget.token, selectedStateId, districtCtrl.text.trim(),
                     );
                     if (!mounted) return;
@@ -719,7 +719,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               if (districtCtrl.text.isNotEmpty) {
-                final ok = await ApiService.editDistrict(widget.token, district['id'].toString(), district['state'].toString(), districtCtrl.text.trim());
+                final ok = await LocalDbService.editDistrict(widget.token, district['id'].toString(), district['state'].toString(), districtCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -738,8 +738,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   void _showEditAreaDialog(Map<String, dynamic> area) {
     Future.wait([
-      ApiService.getStates(widget.token),
-      ApiService.getDistricts(widget.token),
+      LocalDbService.getStates(widget.token),
+      LocalDbService.getDistricts(widget.token),
     ]).then((results) {
       if (!mounted) return;
       final states = results[0];
@@ -811,7 +811,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (selectedDistrictId != null && wardCtrl.text.isNotEmpty) {
-                    final ok = await ApiService.editArea(
+                    final ok = await LocalDbService.editArea(
                       widget.token, area['id'].toString(), selectedDistrictId!,
                       blockCtrl.text.trim(), wardCtrl.text.trim(),
                     );
@@ -842,7 +842,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
           onPressed: () async {
-            final ok = await ApiService.deleteState(widget.token, state['id'].toString());
+            final ok = await LocalDbService.deleteState(widget.token, state['id'].toString());
             if (!mounted) return;
             Navigator.pop(ctx);
             if (ok) _refreshData();
@@ -862,7 +862,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
           onPressed: () async {
-            final ok = await ApiService.deleteDistrict(widget.token, district['id'].toString());
+            final ok = await LocalDbService.deleteDistrict(widget.token, district['id'].toString());
             if (!mounted) return;
             Navigator.pop(ctx);
             if (ok) _refreshData();
@@ -882,7 +882,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
           onPressed: () async {
-            final ok = await ApiService.deleteArea(widget.token, area['id'].toString());
+            final ok = await LocalDbService.deleteArea(widget.token, area['id'].toString());
             if (!mounted) return;
             Navigator.pop(ctx);
             if (ok) _refreshData();
@@ -1027,7 +1027,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
           onPressed: () async {
-            final ok = await ApiService.deleteASHAWorker(widget.token, worker['id'].toString());
+            final ok = await LocalDbService.deleteASHAWorker(widget.token, worker['id'].toString());
             if (!mounted) return;
             Navigator.pop(ctx);
             if (ok) _refreshData();
