@@ -20,6 +20,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   late Future<List<dynamic>> _areasFuture;
   late Future<List<dynamic>> _districtsFuture;
   late Future<List<dynamic>> _statesFuture;
+  // Combined future stored as state so FutureBuilder never sees a new Future on rebuild
+  late Future<List<List<dynamic>>> _masterDataFuture;
 
   @override
   void initState() {
@@ -34,6 +36,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       _areasFuture = LocalDbService.getAreas(widget.token);
       _districtsFuture = LocalDbService.getDistricts(widget.token);
       _statesFuture = LocalDbService.getStates(widget.token);
+      // Must re-assign here too so FutureBuilder gets updated data after add/edit/delete
+      _masterDataFuture = Future.wait([
+        LocalDbService.getStates(widget.token),
+        LocalDbService.getDistricts(widget.token),
+        LocalDbService.getAreas(widget.token),
+      ]);
     });
   }
 
@@ -1127,7 +1135,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Widget _buildMasterDataTab() {
     return FutureBuilder<List<List<dynamic>>>(
-      future: Future.wait([_statesFuture, _districtsFuture, _areasFuture]),
+      future: _masterDataFuture, // ← stored in state, not created in build()
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

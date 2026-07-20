@@ -133,10 +133,10 @@ class LocalDbService {
 
   static Future<Map<String, dynamic>> loginASHA(String name, String phoneNumber) async {
     final db = await database;
-    // Match against full name (first_name + ' ' + last_name) OR just first_name
+    // Match by: full name (first + last), first name only, OR username (login name)
     final List<Map<String, dynamic>> maps = await db.rawQuery(
-      "SELECT * FROM users WHERE (first_name || ' ' || last_name = ? OR first_name = ?) AND phone_number = ? AND role = 'asha'",
-      [name, name, phoneNumber],
+      "SELECT * FROM users WHERE (first_name || ' ' || last_name = ? OR first_name = ? OR username = ?) AND phone_number = ? AND role = 'asha'",
+      [name, name, name, phoneNumber],
     );
     if (maps.isNotEmpty) {
       final user = maps.first;
