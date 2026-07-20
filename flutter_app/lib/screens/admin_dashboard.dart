@@ -253,9 +253,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final districts = results[1];
       final areas = results[2];
 
-      if (states.isEmpty || districts.isEmpty || areas.isEmpty) {
+      if (states.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('States or Areas are missing.')),
+          const SnackBar(content: Text('Please add at least one State first.')),
         );
         return;
       }
@@ -1126,11 +1126,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Widget _buildMasterDataTab() {
-    return FutureBuilder<List<dynamic>>(
+    return FutureBuilder<List<List<dynamic>>>(
       future: Future.wait([_statesFuture, _districtsFuture, _areasFuture]),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+            const SizedBox(height: 12),
+            Text('Error: ${snapshot.error}', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: _refreshData, child: const Text('Retry')),
+          ]));
         }
 
         final states = snapshot.data?[0] ?? [];
@@ -1191,25 +1200,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 Map<String, Map<String, List<dynamic>>> hierarchy = {};
                 
                 for (var s in states) {
-                  hierarchy[s['name']] = {};
+                  String sName = s['name']?.toString() ?? 'Unknown State';
+                  hierarchy[sName] = {};
                 }
 
                 for (var d in districts) {
-                  String stateId = d['state_id'].toString();
-                  final stateObj = states.firstWhere((s) => s['id'].toString() == stateId, orElse: () => null);
+                  String stateId = d['state_id']?.toString() ?? '';
+                  final stateObj = states.firstWhere((s) => s['id']?.toString() == stateId, orElse: () => null);
                   if (stateObj != null) {
-                    hierarchy[stateObj['name']]![d['name']] = [];
+                    String sName = stateObj['name']?.toString() ?? 'Unknown State';
+                    String dName = d['name']?.toString() ?? 'Unknown District';
+                    if (hierarchy.containsKey(sName)) {
+                      hierarchy[sName]![dName] = [];
+                    }
                   }
                 }
 
                 for (var area in areas) {
-                  String districtId = area['district_id'].toString();
+                  String districtId = area['district_id']?.toString() ?? '';
                   var districtData = districtMap[districtId];
                   if (districtData != null) {
-                    String stateId = districtData['state_id'].toString();
-                    final stateObj = states.firstWhere((s) => s['id'].toString() == stateId, orElse: () => null);
+                    String stateId = districtData['state_id']?.toString() ?? '';
+                    final stateObj = states.firstWhere((s) => s['id']?.toString() == stateId, orElse: () => null);
                     if (stateObj != null) {
-                      hierarchy[stateObj['name']]![districtData['name']]!.add(area);
+                      String sName = stateObj['name']?.toString() ?? 'Unknown State';
+                      String dName = districtData['name']?.toString() ?? 'Unknown District';
+                      if (hierarchy.containsKey(sName) && hierarchy[sName]!.containsKey(dName)) {
+                        hierarchy[sName]![dName]!.add(area);
+                      }
                     }
                   }
                 }

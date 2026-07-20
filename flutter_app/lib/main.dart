@@ -1,10 +1,14 @@
-import 'package:flutter/material.dart';                                                       
-    import 'screens/login_screen.dart';                                                           
-                                                                                                  
-    void main() {                                                                                 
-      runApp(const HealthVaultApp());                                                             
-    }                                                                                             
-                                                                                                  
+import 'package:flutter/material.dart';
+import 'screens/login_screen.dart';
+// Conditional import: stub (no-op) for Android/iOS, FFI init for Windows/Linux/macOS
+import 'db_init_stub.dart'
+    if (dart.library.ffi) 'db_init_desktop.dart';
+
+void main() {
+  initializeDatabase(); // no-op on mobile, FFI init on desktop
+  runApp(const HealthVaultApp());
+}
+
     class HealthVaultApp extends StatelessWidget {                                                
       const HealthVaultApp({super.key});                                                          
                                                                                                   

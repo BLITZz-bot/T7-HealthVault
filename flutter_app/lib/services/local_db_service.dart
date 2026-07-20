@@ -133,10 +133,10 @@ class LocalDbService {
 
   static Future<Map<String, dynamic>> loginASHA(String name, String phoneNumber) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'users',
-      where: 'first_name = ? AND phone_number = ? AND role = ?',
-      whereArgs: [name, phoneNumber, 'asha'],
+    // Match against full name (first_name + ' ' + last_name) OR just first_name
+    final List<Map<String, dynamic>> maps = await db.rawQuery(
+      "SELECT * FROM users WHERE (first_name || ' ' || last_name = ? OR first_name = ?) AND phone_number = ? AND role = 'asha'",
+      [name, name, phoneNumber],
     );
     if (maps.isNotEmpty) {
       final user = maps.first;
@@ -505,7 +505,7 @@ class LocalDbService {
     List<Map<String, dynamic>> result = [];
     for (var w in workers) {
       final areaMaps = await db.rawQuery('''
-        SELECT a.village_or_ward 
+        SELECT a.id, a.village_or_ward 
         FROM areas a 
         JOIN user_areas ua ON a.id = ua.area_id 
         WHERE ua.user_id = ?

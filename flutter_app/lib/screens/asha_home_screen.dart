@@ -39,9 +39,9 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
       final districts = results[1];
       final areas = results[2];
 
-      if (states.isEmpty || districts.isEmpty || areas.isEmpty) {
+      if (states.isEmpty || areas.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('States, Districts, or Areas are missing. Please contact admin.')),
+          const SnackBar(content: Text('No States or Areas found. Please ask admin to add them first.')),
         );
         return;
       }
@@ -92,7 +92,7 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
                       value: selectedDistrictId,
                       decoration: const InputDecoration(labelText: 'Select District'),
                       items: districts
-                          .where((d) => d['state'].toString() == selectedStateId)
+                          .where((d) => d['state_id'].toString() == selectedStateId)
                           .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(
                                 value: d['id'].toString(),
                                 child: Text(d['name'] ?? 'District'),
@@ -114,7 +114,7 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
                       value: selectedAreaId,
                       decoration: const InputDecoration(labelText: 'Select Area / Village'),
                       items: areas
-                          .where((a) => a['district'].toString() == selectedDistrictId)
+                          .where((a) => a['district_id'].toString() == selectedDistrictId)
                           .map<DropdownMenuItem<String>>((a) => DropdownMenuItem<String>(
                                 value: a['id'].toString(),
                                 child: Text('${a['village_or_ward']} (Block: ${a['block']})'),
