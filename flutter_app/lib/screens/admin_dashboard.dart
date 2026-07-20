@@ -129,7 +129,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       value: selectedDistrictId,
                       decoration: const InputDecoration(labelText: 'Select District'),
                       items: districts
-                          .where((d) => d['state'].toString() == selectedStateId)
+                          .where((d) => d['state_id'].toString() == selectedStateId)
                           .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(
                                 value: d['id'].toString(),
                                 child: Text(d['name'] ?? 'District'),
@@ -151,7 +151,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   else
                     InkWell(
                       onTap: () async {
-                        final stateAreas = areas.where((a) => a['state'].toString() == selectedStateId && a['district'].toString() == selectedDistrictId).toList();
+                        final stateAreas = areas.where((a) => a['district_id'].toString() == selectedDistrictId).toList();
                         await showDialog(
                           context: context,
                           builder: (context) {
@@ -275,7 +275,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final firstAreaId = selectedAreaIds.first;
         final firstArea = areas.firstWhere((a) => a['id'].toString() == firstAreaId, orElse: () => null);
         if (firstArea != null) {
-          selectedDistrictId = firstArea['district']?.toString();
+          selectedDistrictId = firstArea['district_id']?.toString();
         }
       }
       String userId = worker['id'].toString();
@@ -327,7 +327,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       value: selectedDistrictId,
                       decoration: const InputDecoration(labelText: 'Select District'),
                       items: districts
-                          .where((d) => d['state'].toString() == selectedStateId)
+                          .where((d) => d['state_id'].toString() == selectedStateId)
                           .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(
                                 value: d['id'].toString(),
                                 child: Text(d['name'] ?? 'District'),
@@ -349,7 +349,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   else
                     InkWell(
                       onTap: () async {
-                        final stateAreas = areas.where((a) => a['state'].toString() == selectedStateId && a['district'].toString() == selectedDistrictId).toList();
+                        final stateAreas = areas.where((a) => a['district_id'].toString() == selectedDistrictId).toList();
                         await showDialog(
                           context: context,
                           builder: (context) {
@@ -493,7 +493,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   value: selectedDistrictId,
                   decoration: const InputDecoration(labelText: 'Select District'),
                   items: districts
-                      .where((d) => d['state'].toString() == selectedStateId)
+                      .where((d) => d['state_id'].toString() == selectedStateId)
                       .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(
                             value: d['id'].toString(),
                             child: Text(d['name'] ?? 'District'),
@@ -719,7 +719,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               if (districtCtrl.text.isNotEmpty) {
-                final ok = await LocalDbService.editDistrict(widget.token, district['id'].toString(), district['state'].toString(), districtCtrl.text.trim());
+                final ok = await LocalDbService.editDistrict(widget.token, district['id'].toString(), district['state_id'].toString(), districtCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -752,8 +752,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
       final blockCtrl = TextEditingController(text: area['block']);
       final wardCtrl = TextEditingController(text: area['village_or_ward']);
-      String selectedStateId = area['state']?.toString() ?? states.first['id'].toString();
-      String? selectedDistrictId = area['district']?.toString();
+      String? selectedDistrictId = area['district_id']?.toString();
+      String? derivedStateId;
+      if (selectedDistrictId != null) {
+        final dist = districts.firstWhere((d) => d['id'].toString() == selectedDistrictId, orElse: () => null);
+        if (dist != null) derivedStateId = dist['state_id']?.toString();
+      }
+      String selectedStateId = derivedStateId ?? states.first['id'].toString();
 
       showDialog(
         context: context,
@@ -789,7 +794,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   value: selectedDistrictId,
                   decoration: const InputDecoration(labelText: 'Select District'),
                   items: districts
-                      .where((d) => d['state'].toString() == selectedStateId)
+                      .where((d) => d['state_id'].toString() == selectedStateId)
                       .map<DropdownMenuItem<String>>((d) => DropdownMenuItem<String>(
                             value: d['id'].toString(),
                             child: Text(d['name'] ?? 'District'),
@@ -1135,9 +1140,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('Master Jurisdictions', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-              Row(children: [
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: [
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 38),
@@ -1150,7 +1156,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   icon: const Icon(Icons.flag, size: 15),
                   label: const Text('+ State'),
                 ),
-                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 38),
@@ -1163,7 +1168,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   icon: const Icon(Icons.location_city, size: 15),
                   label: const Text('+ District'),
                 ),
-                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white,
@@ -1191,7 +1195,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 }
 
                 for (var d in districts) {
-                  String stateId = d['state'].toString();
+                  String stateId = d['state_id'].toString();
                   final stateObj = states.firstWhere((s) => s['id'].toString() == stateId, orElse: () => null);
                   if (stateObj != null) {
                     hierarchy[stateObj['name']]![d['name']] = [];
@@ -1199,10 +1203,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 }
 
                 for (var area in areas) {
-                  String districtId = area['district'].toString();
+                  String districtId = area['district_id'].toString();
                   var districtData = districtMap[districtId];
                   if (districtData != null) {
-                    String stateId = districtData['state'].toString();
+                    String stateId = districtData['state_id'].toString();
                     final stateObj = states.firstWhere((s) => s['id'].toString() == stateId, orElse: () => null);
                     if (stateObj != null) {
                       hierarchy[stateObj['name']]![districtData['name']]!.add(area);
@@ -1265,7 +1269,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           List<dynamic> districtAreas = districtEntry.value;
                           
                           final districtObj = districts.firstWhere(
-                            (d) => d['name'] == districtName && d['state'].toString() == stateObj?['id']?.toString(),
+                            (d) => d['name'] == districtName && d['state_id'].toString() == stateObj?['id']?.toString(),
                             orElse: () => null,
                           );
                           

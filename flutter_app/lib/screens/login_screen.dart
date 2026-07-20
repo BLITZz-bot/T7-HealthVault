@@ -35,7 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _phoneController.text.trim(),
       );
 
-      final token = res['tokens']['access'];
+      final token = res['token'];
       final user = res['user'];
 
       if (!mounted) return;
@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text.trim(),
       );
 
-      final token = res['tokens']['access'];
+      final token = res['token'];
       final user = res['user'];
 
       if (!mounted) return;
