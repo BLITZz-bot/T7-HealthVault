@@ -168,14 +168,14 @@ class LocalDbService {
       JOIN user_areas ua ON a.id = ua.area_id 
       WHERE ua.user_id = ?
     ''', [user['id']]);
-    final areaNames = areaMaps.map((e) => e['village_or_ward'] as String).toList();
+    final areaNames = areaMaps.map((e) => e['village_or_ward']?.toString() ?? 'Unnamed Area').toList();
 
     // Fetch state name
     String stateName = 'N/A';
     if (user['state'] != null && user['state'].toString().isNotEmpty) {
       final stateMaps = await db.query('states', where: 'id = ?', whereArgs: [user['state']]);
       if (stateMaps.isNotEmpty) {
-        stateName = stateMaps.first['name'] as String;
+        stateName = stateMaps.first['name']?.toString() ?? 'N/A';
       }
     }
 
@@ -510,14 +510,14 @@ class LocalDbService {
         JOIN user_areas ua ON a.id = ua.area_id 
         WHERE ua.user_id = ?
       ''', [w['id']]);
-      final areaNames = areaMaps.map((e) => e['village_or_ward'] as String).toList();
+      final areaNames = areaMaps.map((e) => e['village_or_ward']?.toString() ?? 'Unnamed Area').toList();
       final areaIds = areaMaps.map((e) => e['id'] as int).toList();
 
       String stateName = 'N/A';
       if (w['state'] != null && w['state'].toString().isNotEmpty) {
         final stateMaps = await db.query('states', where: 'id = ?', whereArgs: [w['state']]);
         if (stateMaps.isNotEmpty) {
-          stateName = stateMaps.first['name'] as String;
+          stateName = stateMaps.first['name']?.toString() ?? 'N/A';
         }
       }
 

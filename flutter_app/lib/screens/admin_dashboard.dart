@@ -16,6 +16,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  Map<String, dynamic>? _firstWhereOrNull(List<dynamic> list, bool Function(dynamic) test) {
+    for (var element in list) {
+      if (test(element)) return element as Map<String, dynamic>;
+    }
+    return null;
+  }
+
   late Future<List<dynamic>> _workersFuture;
   late Future<List<dynamic>> _areasFuture;
   late Future<List<dynamic>> _districtsFuture;
@@ -281,7 +288,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       String? selectedDistrictId;
       if (selectedAreaIds.isNotEmpty) {
         final firstAreaId = selectedAreaIds.first;
-        final firstArea = areas.firstWhere((a) => a['id'].toString() == firstAreaId, orElse: () => null);
+        final firstArea = _firstWhereOrNull(areas, (a) => a['id'].toString() == firstAreaId);
         if (firstArea != null) {
           selectedDistrictId = firstArea['district_id']?.toString();
         }
@@ -763,7 +770,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       String? selectedDistrictId = area['district_id']?.toString();
       String? derivedStateId;
       if (selectedDistrictId != null) {
-        final dist = districts.firstWhere((d) => d['id'].toString() == selectedDistrictId, orElse: () => null);
+        final dist = _firstWhereOrNull(districts, (d) => d['id'].toString() == selectedDistrictId);
         if (dist != null) derivedStateId = dist['state_id']?.toString();
       }
       String selectedStateId = derivedStateId ?? states.first['id'].toString();
@@ -1214,7 +1221,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
                 for (var d in districts) {
                   String stateId = d['state_id']?.toString() ?? '';
-                  final stateObj = states.firstWhere((s) => s['id']?.toString() == stateId, orElse: () => null);
+                  final stateObj = _firstWhereOrNull(states, (s) => s['id']?.toString() == stateId);
                   if (stateObj != null) {
                     String sName = stateObj['name']?.toString() ?? 'Unknown State';
                     String dName = d['name']?.toString() ?? 'Unknown District';
@@ -1229,7 +1236,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   var districtData = districtMap[districtId];
                   if (districtData != null) {
                     String stateId = districtData['state_id']?.toString() ?? '';
-                    final stateObj = states.firstWhere((s) => s['id']?.toString() == stateId, orElse: () => null);
+                    final stateObj = _firstWhereOrNull(states, (s) => s['id']?.toString() == stateId);
                     if (stateObj != null) {
                       String sName = stateObj['name']?.toString() ?? 'Unknown State';
                       String dName = districtData['name']?.toString() ?? 'Unknown District';
@@ -1260,9 +1267,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     String stateName = stateEntry.key;
                     Map<String, List<dynamic>> stateDistricts = stateEntry.value;
                     
-                    final stateObj = states.firstWhere(
+                    final stateObj = _firstWhereOrNull(
+                      states,
                       (s) => s['name'] == stateName,
-                      orElse: () => null,
                     );
 
                     return Card(
@@ -1294,9 +1301,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           String districtName = districtEntry.key;
                           List<dynamic> districtAreas = districtEntry.value;
                           
-                          final districtObj = districts.firstWhere(
+                          final districtObj = _firstWhereOrNull(
+                            districts,
                             (d) => d['name'] == districtName && d['state_id'].toString() == stateObj?['id']?.toString(),
-                            orElse: () => null,
                           );
                           
                           return Padding(
