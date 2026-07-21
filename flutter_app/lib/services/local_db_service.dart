@@ -17,7 +17,7 @@ class LocalDbService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE users(
@@ -29,7 +29,8 @@ class LocalDbService {
             phone_number TEXT,
             aadhaar_number TEXT,
             role TEXT,
-            state TEXT
+            state TEXT,
+            profile_image TEXT
           )
         ''');
 
@@ -112,6 +113,15 @@ class LocalDbService {
           'last_name': 'System',
         });
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          try {
+            await db.execute('ALTER TABLE users ADD COLUMN profile_image TEXT');
+          } catch (e) {
+            // Ignore if column already exists
+          }
+        }
+      },
     );
   }
 
@@ -161,13 +171,24 @@ class LocalDbService {
 
   static Future<Map<String, dynamic>> _buildUserPayload(Map<String, dynamic> user) async {
     final db = await database;
-    // Fetch assigned areas
+    // Fetch assigned areas with their details and district name
     final areaMaps = await db.rawQuery('''
-      SELECT a.village_or_ward 
+      SELECT a.id, a.block, a.village_or_ward, d.name as district_name
       FROM areas a 
       JOIN user_areas ua ON a.id = ua.area_id 
+      LEFT JOIN districts d ON a.district_id = d.id
       WHERE ua.user_id = ?
+      ORDER BY a.village_or_ward ASC
     ''', [user['id']]);
+    
+    final assignedAreas = areaMaps.map((e) => {
+      'id': e['id'],
+      'block': e['block'],
+      'village_or_ward': e['village_or_ward'],
+      'district_name': e['district_name'],
+    }).toList();
+
+    final districtNames = areaMaps.map((e) => e['district_name']?.toString() ?? 'N/A').toSet().toList();
     final areaNames = areaMaps.map((e) => e['village_or_ward']?.toString() ?? 'Unnamed Area').toList();
 
     // Fetch state name
@@ -187,9 +208,13 @@ class LocalDbService {
         'first_name': user['first_name'],
         'last_name': user['last_name'],
         'phone_number': user['phone_number'],
+        'aadhaar_number': user['aadhaar_number'],
+        'profile_image': user['profile_image'],
         'role': user['role'],
         'state_name': stateName,
+        'district_names': districtNames,
         'area_names': areaNames,
+        'assigned_areas': assignedAreas,
       }
     };
   }
@@ -200,8 +225,30 @@ class LocalDbService {
 
   static Future<List<dynamic>> getFamilies(String token) async {
     final db = await database;
-    // For now, return all families. In a real scenario, filter by the worker's assigned areas.
-    final List<Map<String, dynamic>> maps = await db.query('families');
+    final userId = _getUserIdFromToken(token);
+    
+    // Check if the user is a superuser (admin). If so, return all families.
+    final userMaps = await db.query('users', where: 'id = ?', whereArgs: [userId]);
+    if (userMaps.isNotEmpty && userMaps.first['role'] == 'superuser') {
+      final List<Map<String, dynamic>> maps = await db.query('families', orderBy: 'family_head_name ASC');
+      return maps.toList();
+    }
+
+    // Otherwise, filter by the worker's assigned areas.
+    final areaMaps = await db.query('user_areas', columns: ['area_id'], where: 'user_id = ?', whereArgs: [userId]);
+    final areaIds = areaMaps.map((e) => e['area_id'] as int).toList();
+    
+    if (areaIds.isEmpty) {
+      return [];
+    }
+
+    final placeholders = List.filled(areaIds.length, '?').join(', ');
+    final List<Map<String, dynamic>> maps = await db.query(
+      'families',
+      where: 'area_id IN ($placeholders)',
+      whereArgs: areaIds,
+      orderBy: 'family_head_name ASC',
+    );
     return maps.toList();
   }
 
@@ -218,7 +265,7 @@ class LocalDbService {
 
   static Future<List<dynamic>> getMembers(String token) async {
     final db = await database;
-    final List<Map<String, dynamic>> members = await db.query('members');
+    final List<Map<String, dynamic>> members = await db.query('members', orderBy: 'full_name ASC');
     
     // We need to append the latest flag and last_recorded_at
     List<Map<String, dynamic>> result = [];
@@ -423,17 +470,17 @@ class LocalDbService {
 
   static Future<List<dynamic>> getStates(String token) async {
     final db = await database;
-    return await db.query('states');
+    return await db.query('states', orderBy: 'name ASC');
   }
 
   static Future<List<dynamic>> getDistricts(String token) async {
     final db = await database;
-    return await db.query('districts');
+    return await db.query('districts', orderBy: 'name ASC');
   }
 
   static Future<List<dynamic>> getAreas(String token) async {
     final db = await database;
-    return await db.query('areas');
+    return await db.query('areas', orderBy: 'block ASC, village_or_ward ASC');
   }
 
   static Future<bool> addState(String token, String name) async {
@@ -500,7 +547,7 @@ class LocalDbService {
 
   static Future<List<dynamic>> getASHAWorkers(String token) async {
     final db = await database;
-    final workers = await db.query('users', where: 'role = ?', whereArgs: ['asha']);
+    final workers = await db.query('users', where: 'role = ?', whereArgs: ['asha'], orderBy: 'first_name ASC, last_name ASC');
     
     List<Map<String, dynamic>> result = [];
     for (var w in workers) {
@@ -539,6 +586,7 @@ class LocalDbService {
     required String aadhaarNumber,
     required String stateId,
     required List<String> areaIds,
+    String? profileImage,
   }) async {
     final db = await database;
     final userId = await db.insert('users', {
@@ -550,6 +598,7 @@ class LocalDbService {
       'aadhaar_number': aadhaarNumber,
       'state': stateId,
       'role': 'asha',
+      'profile_image': profileImage,
     });
 
     for (var areaId in areaIds) {
@@ -571,6 +620,7 @@ class LocalDbService {
     required String aadhaarNumber,
     required String stateId,
     required List<String> areaIds,
+    String? profileImage,
   }) async {
     final db = await database;
     final uId = int.parse(userId);
@@ -581,6 +631,7 @@ class LocalDbService {
       'phone_number': phoneNumber,
       'aadhaar_number': aadhaarNumber,
       'state': stateId,
+      'profile_image': profileImage,
     }, where: 'id = ?', whereArgs: [uId]);
 
     // Update areas

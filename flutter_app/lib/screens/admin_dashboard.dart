@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../services/local_db_service.dart';
 import 'login_screen.dart';
 
@@ -96,6 +99,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       String? selectedStateId;
       String? selectedDistrictId;
       List<String> selectedAreaIds = [];
+      String? pickedImageBase64;
 
       showDialog(
         context: context,
@@ -111,6 +115,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               width: 420,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  StatefulBuilder(
+                    builder: (context, setDialogState) {
+                      return Column(
+                        children: [
+                          GestureDetector(
+                            onTap: () async {
+                              final result = await FilePicker.pickFiles(
+                                type: FileType.image,
+                                allowMultiple: false,
+                              );
+                              if (result != null) {
+                                if (result.files.single.bytes != null) {
+                                  final bytes = result.files.single.bytes!;
+                                  setDialogState(() {
+                                    pickedImageBase64 = base64Encode(bytes);
+                                  });
+                                } else if (result.files.single.path != null) {
+                                  final file = File(result.files.single.path!);
+                                  final bytes = await file.readAsBytes();
+                                  setDialogState(() {
+                                    pickedImageBase64 = base64Encode(bytes);
+                                  });
+                                }
+                              }
+                            },
+                            child: CircleAvatar(
+                              radius: 36,
+                              backgroundColor: Colors.teal.shade50,
+                              backgroundImage: pickedImageBase64 != null
+                                  ? MemoryImage(base64Decode(pickedImageBase64!))
+                                  : null,
+                              child: pickedImageBase64 == null
+                                  ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            pickedImageBase64 == null ? 'Add Profile Photo (Optional)' : 'Photo Selected',
+                            style: TextStyle(fontSize: 12, color: Colors.teal.shade800, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      );
+                    }
+                  ),
+                  const SizedBox(height: 12),
                   TextField(controller: usernameCtrl, decoration: const InputDecoration(labelText: 'Username (login name)')),
                   const SizedBox(height: 8),
                   TextField(controller: firstNameCtrl, decoration: const InputDecoration(labelText: 'First Name')),
@@ -238,6 +288,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       aadhaarNumber: aadhaarCtrl.text.trim(),
                       stateId: selectedStateId!,
                       areaIds: selectedAreaIds,
+                      profileImage: pickedImageBase64,
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
@@ -294,6 +345,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         }
       }
       String userId = worker['id'].toString();
+      String? pickedImageBase64 = worker['profile_image'];
 
       showDialog(
         context: context,
@@ -309,6 +361,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               width: 420,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  StatefulBuilder(
+                    builder: (context, setDialogState) {
+                      return Column(
+                        children: [
+                          GestureDetector(
+                            onTap: () async {
+                              final result = await FilePicker.pickFiles(
+                                type: FileType.image,
+                                allowMultiple: false,
+                              );
+                              if (result != null) {
+                                if (result.files.single.bytes != null) {
+                                  final bytes = result.files.single.bytes!;
+                                  setDialogState(() {
+                                    pickedImageBase64 = base64Encode(bytes);
+                                  });
+                                } else if (result.files.single.path != null) {
+                                  final file = File(result.files.single.path!);
+                                  final bytes = await file.readAsBytes();
+                                  setDialogState(() {
+                                    pickedImageBase64 = base64Encode(bytes);
+                                  });
+                                }
+                              }
+                            },
+                            child: CircleAvatar(
+                              radius: 36,
+                              backgroundColor: Colors.teal.shade50,
+                              backgroundImage: pickedImageBase64 != null
+                                  ? MemoryImage(base64Decode(pickedImageBase64!))
+                                  : null,
+                              child: pickedImageBase64 == null
+                                  ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            pickedImageBase64 == null ? 'Add Profile Photo (Optional)' : 'Photo Selected',
+                            style: TextStyle(fontSize: 12, color: Colors.teal.shade800, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      );
+                    }
+                  ),
+                  const SizedBox(height: 12),
                   TextField(controller: usernameCtrl, decoration: const InputDecoration(labelText: 'Username (login name)')),
                   const SizedBox(height: 8),
                   TextField(controller: firstNameCtrl, decoration: const InputDecoration(labelText: 'First Name')),
@@ -437,6 +535,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       aadhaarNumber: aadhaarCtrl.text.trim(),
                       stateId: selectedStateId!,
                       areaIds: selectedAreaIds,
+                      profileImage: pickedImageBase64,
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
@@ -1082,7 +1181,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             CircleAvatar(
               radius: 24,
               backgroundColor: Colors.teal.shade100,
-              child: Text(initial, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Color(0xFF004D40))),
+              backgroundImage: (worker['profile_image'] != null && worker['profile_image'].toString().isNotEmpty)
+                  ? MemoryImage(base64Decode(worker['profile_image'].toString()))
+                  : null,
+              child: (worker['profile_image'] != null && worker['profile_image'].toString().isNotEmpty)
+                  ? null
+                  : Text(initial, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Color(0xFF004D40))),
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
