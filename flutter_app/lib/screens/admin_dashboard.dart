@@ -28,8 +28,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   late Future<List<dynamic>> _workersFuture;
   late Future<List<dynamic>> _areasFuture;
-  late Future<List<dynamic>> _districtsFuture;
-  late Future<List<dynamic>> _statesFuture;
   // Combined future stored as state so FutureBuilder never sees a new Future on rebuild
   late Future<List<List<dynamic>>> _masterDataFuture;
 
@@ -44,8 +42,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     setState(() {
       _workersFuture = LocalDbService.getASHAWorkers(widget.token);
       _areasFuture = LocalDbService.getAreas(widget.token);
-      _districtsFuture = LocalDbService.getDistricts(widget.token);
-      _statesFuture = LocalDbService.getStates(widget.token);
       // Must re-assign here too so FutureBuilder gets updated data after add/edit/delete
       _masterDataFuture = Future.wait([
         LocalDbService.getStates(widget.token),
@@ -172,7 +168,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   TextField(controller: aadhaarCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '12-digit Aadhaar Number')),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedStateId,
+                    initialValue: selectedStateId,
                     decoration: const InputDecoration(labelText: 'Select State'),
                     items: states.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(
                       value: s['id'].toString(),
@@ -191,7 +187,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   const SizedBox(height: 12),
                   if (selectedStateId != null) ...[
                     DropdownButtonFormField<String>(
-                      value: selectedDistrictId,
+                      initialValue: selectedDistrictId,
                       decoration: const InputDecoration(labelText: 'Select District'),
                       items: districts
                           .where((d) => d['state_id'].toString() == selectedStateId)
@@ -292,10 +288,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(ok ? 'ASHA Worker Registered!' : 'Failed. Check all fields.'),
-                      backgroundColor: ok ? Colors.green : Colors.redAccent,
-                    ));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok ? 'ASHA Worker Registered!' : 'Failed. Check all fields.'),
+                        backgroundColor: ok ? Colors.green : Colors.redAccent,
+                      ));
+                    }
                     if (ok) _refreshData();
                   }
                 },
@@ -334,7 +332,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final aadhaarCtrl = TextEditingController(text: worker['aadhaar_number']);
 
       // Find the state and area IDs from the worker object (fallback to first available if not found)
-      String? selectedStateId = worker['state'] != null ? worker['state'].toString() : null;
+      String? selectedStateId = worker['state']?.toString();
       List<String> selectedAreaIds = List<String>.from(worker['assigned_areas']?.map((id) => id.toString()) ?? []);
       String? selectedDistrictId;
       if (selectedAreaIds.isNotEmpty) {
@@ -418,7 +416,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   TextField(controller: aadhaarCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '12-digit Aadhaar Number')),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedStateId,
+                    initialValue: selectedStateId,
                     decoration: const InputDecoration(labelText: 'Select State'),
                     items: states.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(
                       value: s['id'].toString(),
@@ -437,7 +435,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   const SizedBox(height: 12),
                   if (selectedStateId != null) ...[
                     DropdownButtonFormField<String>(
-                      value: selectedDistrictId,
+                      initialValue: selectedDistrictId,
                       decoration: const InputDecoration(labelText: 'Select District'),
                       items: districts
                           .where((d) => d['state_id'].toString() == selectedStateId)
@@ -539,10 +537,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(ok ? 'ASHA Worker Updated!' : 'Failed to update worker.'),
-                      backgroundColor: ok ? Colors.green : Colors.redAccent,
-                    ));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok ? 'ASHA Worker Updated!' : 'Failed to update worker.'),
+                        backgroundColor: ok ? Colors.green : Colors.redAccent,
+                      ));
+                    }
                     if (ok) _refreshData(); // Refresh the list if successful
                   }
                 },
@@ -587,7 +587,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               width: 400,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
-                  value: selectedStateId,
+                  initialValue: selectedStateId,
                   decoration: const InputDecoration(labelText: 'Select State'),
                   items: states.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(
                     value: s['id'].toString(),
@@ -604,7 +604,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedDistrictId,
+                  initialValue: selectedDistrictId,
                   decoration: const InputDecoration(labelText: 'Select District'),
                   items: districts
                       .where((d) => d['state_id'].toString() == selectedStateId)
@@ -635,10 +635,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(ok ? 'Area Created!' : 'Failed to create area.'),
-                      backgroundColor: ok ? Colors.green : Colors.redAccent,
-                    ));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok ? 'Area Created!' : 'Failed to create area.'),
+                        backgroundColor: ok ? Colors.green : Colors.redAccent,
+                      ));
+                    }
                     if (ok) _refreshData();
                   }
                 },
@@ -670,10 +672,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 final ok = await LocalDbService.addState(widget.token, stateCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(ok ? 'State Created!' : 'Failed. State may already exist.'),
-                  backgroundColor: ok ? Colors.green : Colors.redAccent,
-                ));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ok ? 'State Created!' : 'Failed. State may already exist.'),
+                    backgroundColor: ok ? Colors.green : Colors.redAccent,
+                  ));
+                }
                 if (ok) _refreshData();
               }
             },
@@ -703,47 +707,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 final ok = await LocalDbService.editState(widget.token, state['id'].toString(), stateCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(ok ? 'State Updated!' : 'Failed to update state.'),
-                  backgroundColor: ok ? Colors.green : Colors.redAccent,
-                ));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ok ? 'State Updated!' : 'Failed to update state.'),
+                    backgroundColor: ok ? Colors.green : Colors.redAccent,
+                  ));
+                }
                 if (ok) _refreshData();
               }
             },
             child: const Text('Save Changes'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddDistrictDialog(String stateId) {
-    final districtCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Add New District'),
-        content: SizedBox(
-          width: 350,
-          child: TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'District Name')),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (districtCtrl.text.isNotEmpty) {
-                final ok = await LocalDbService.addDistrict(widget.token, stateId, districtCtrl.text.trim());
-                if (!mounted) return;
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(ok ? 'District Created!' : 'Failed to create district.'),
-                  backgroundColor: ok ? Colors.green : Colors.redAccent,
-                ));
-                if (ok) _refreshData();
-              }
-            },
-            child: const Text('Save District'),
           ),
         ],
       ),
@@ -776,7 +749,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               width: 350,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
-                  value: selectedStateId,
+                  initialValue: selectedStateId,
                   decoration: const InputDecoration(labelText: 'Select State'),
                   items: states.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(
                     value: s['id'].toString(),
@@ -801,10 +774,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(ok ? 'District Created!' : 'Failed to create district.'),
-                      backgroundColor: ok ? Colors.green : Colors.redAccent,
-                    ));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok ? 'District Created!' : 'Failed to create district.'),
+                        backgroundColor: ok ? Colors.green : Colors.redAccent,
+                      ));
+                    }
                     if (ok) _refreshData();
                   }
                 },
@@ -836,10 +811,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 final ok = await LocalDbService.editDistrict(widget.token, district['id'].toString(), district['state_id'].toString(), districtCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(ok ? 'District Updated!' : 'Failed to update district.'),
-                  backgroundColor: ok ? Colors.green : Colors.redAccent,
-                ));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ok ? 'District Updated!' : 'Failed to update district.'),
+                    backgroundColor: ok ? Colors.green : Colors.redAccent,
+                  ));
+                }
                 if (ok) _refreshData();
               }
             },
@@ -860,7 +837,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final districts = results[1];
 
       if (states.isEmpty) { 
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No states available')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No states available')));
+        }
         return; 
       }
 
@@ -888,7 +867,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               width: 400,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
-                  value: selectedStateId,
+                  initialValue: selectedStateId,
                   decoration: const InputDecoration(labelText: 'Select State'),
                   items: states.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(
                     value: s['id'].toString(),
@@ -905,7 +884,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedDistrictId,
+                  initialValue: selectedDistrictId,
                   decoration: const InputDecoration(labelText: 'Select District'),
                   items: districts
                       .where((d) => d['state_id'].toString() == selectedStateId)
@@ -936,10 +915,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(ok ? 'Area Updated!' : 'Failed to update area.'),
-                      backgroundColor: ok ? Colors.green : Colors.redAccent,
-                    ));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok ? 'Area Updated!' : 'Failed to update area.'),
+                        backgroundColor: ok ? Colors.green : Colors.redAccent,
+                      ));
+                    }
                     if (ok) _refreshData();
                   }
                 },
@@ -1088,7 +1069,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: Row(children: [
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
                   child: const Icon(Icons.people_alt, color: Colors.white, size: 32),
                 ),
                 const SizedBox(width: 16),
@@ -1313,7 +1294,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
             Builder(
               builder: (context) {
-                final stateNames = {for (var s in states) s['id'].toString(): s['name']};
                 final districtMap = {for (var d in districts) d['id'].toString(): d};
                 
                 Map<String, Map<String, List<dynamic>>> hierarchy = {};
@@ -1530,7 +1510,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, color: color, size: 28),

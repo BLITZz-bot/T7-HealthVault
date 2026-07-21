@@ -25,7 +25,7 @@ void main() {
             ),                                                                                    
             inputDecorationTheme: InputDecorationTheme(                                           
               filled: true,                                                                       
-              fillColor: Colors.teal.shade50.withOpacity(0.5),                                    
+              fillColor: Colors.teal.shade50.withValues(alpha: 0.5),                                    
               border: OutlineInputBorder(                                                         
                 borderRadius: BorderRadius.circular(12),                                          
                 borderSide: BorderSide.none,                                                      

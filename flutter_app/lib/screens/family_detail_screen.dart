@@ -50,7 +50,7 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
                 TextField(controller: ageCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Age')),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: gender,
+                  initialValue: gender,
                   decoration: const InputDecoration(labelText: 'Gender'),
                   items: const [
                     DropdownMenuItem(value: 'male', child: Text('Male')),
@@ -80,8 +80,9 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
                     gender,
                     relCtrl.text,
                   );
-                  if (mounted) Navigator.pop(ctx);
-                  if (ok) {
+                  if (!mounted || !context.mounted) return;
+                  Navigator.pop(ctx);
+                  if (ok && context.mounted) {
                     _refreshMembers();
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Member added successfully!')));
                   }
@@ -167,9 +168,9 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: _flagColor(flag).withOpacity(0.15),
+                                  color: _flagColor(flag).withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: _flagColor(flag).withOpacity(0.5)),
+                                  border: Border.all(color: _flagColor(flag).withValues(alpha: 0.5)),
                                 ),
                                 child: Text(
                                   flag.toUpperCase(),

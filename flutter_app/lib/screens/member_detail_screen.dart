@@ -276,14 +276,14 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                     notes: notesCtrl.text,
                     entrySource: 'manual',
                   );
-                  if (!mounted) return;
+                  if (!mounted || !context.mounted) return;
                   Navigator.pop(ctx);
-                  if (ok) {
+                  if (ok && context.mounted) {
                     _refresh();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Health record saved!'), backgroundColor: Colors.green),
                     );
-                  } else {
+                  } else if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Failed to save record.'), backgroundColor: Colors.red),
                     );
@@ -343,7 +343,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: Chip(
-                backgroundColor: flagColor(currentFlag).withOpacity(0.2),
+                backgroundColor: flagColor(currentFlag).withValues(alpha: 0.2),
                 side: BorderSide(color: flagColor(currentFlag)),
                 label: Text(currentFlag.toUpperCase(),
                   style: TextStyle(color: flagColor(currentFlag), fontSize: 11, fontWeight: FontWeight.bold),
@@ -440,9 +440,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: flagColor(flag).withOpacity(0.15),
+                            color: flagColor(flag).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: flagColor(flag).withOpacity(0.5)),
+                            border: Border.all(color: flagColor(flag).withValues(alpha: 0.5)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -467,7 +467,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                             ),
                           ),
                           backgroundColor: isDevice ? Colors.blue.shade50 : Colors.teal.shade50,
-                          side: BorderSide(color: isDevice ? Colors.blueAccent.withOpacity(0.4) : Colors.teal.withOpacity(0.4)),
+                          side: BorderSide(color: isDevice ? Colors.blueAccent.withValues(alpha: 0.4) : Colors.teal.withValues(alpha: 0.4)),
                         ),
                       ],
                     ),
@@ -634,7 +634,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                         dotData: FlDotData(show: bsfData.length <= 10),
                         belowBarData: BarAreaData(
                           show: true,
-                          color: Colors.purple.withOpacity(0.08),
+                          color: Colors.purple.withValues(alpha: 0.08),
                         ),
                       ),
                     ],

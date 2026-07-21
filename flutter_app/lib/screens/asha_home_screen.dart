@@ -81,7 +81,7 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
 
                 // Area selection dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedAreaId,
+                  initialValue: selectedAreaId,
                   decoration: const InputDecoration(labelText: 'Select Area / Village'),
                   items: assignedAreas.map<DropdownMenuItem<String>>((a) {
                     return DropdownMenuItem<String>(
@@ -112,8 +112,9 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
                     contactController.text,
                     selectedAreaId!,
                   );
-                  if (mounted) Navigator.pop(context);
-                  if (success) {
+                  if (!mounted || !context.mounted) return;
+                  Navigator.pop(context);
+                  if (success && context.mounted) {
                     _refreshFamilies();
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Family Added Successfully!')));
                   }
@@ -219,7 +220,7 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.teal.shade200.withOpacity(0.4),
+                  color: Colors.teal.shade200.withValues(alpha: 0.4),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -235,7 +236,7 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -288,7 +289,7 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
