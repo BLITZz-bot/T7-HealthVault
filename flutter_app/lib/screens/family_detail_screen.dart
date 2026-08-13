@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/local_db_service.dart';
+import '../services/image_utils.dart';
 import 'member_detail_screen.dart';
 
 class FamilyDetailScreen extends StatefulWidget {
@@ -35,16 +36,48 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
     final ageCtrl = TextEditingController();
     final relCtrl = TextEditingController();
     String gender = 'male';
+    String? pickedImageBase64;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
-          title: const Text('Add Family Member'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.person_add, color: Color(0xFF00796B)),
+              SizedBox(width: 8),
+              Text('Add Family Member'),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                GestureDetector(
+                  onTap: () async {
+                    final compressedBase64 = await ImageUtils.pickAndCompressImage(context);
+                    if (compressedBase64 != null) {
+                      setModalState(() {
+                        pickedImageBase64 = compressedBase64;
+                      });
+                    }
+                  },
+                  child: CircleAvatar(
+                    radius: 36,
+                    backgroundColor: Colors.teal.shade50,
+                    backgroundImage: ImageUtils.safeBase64Image(pickedImageBase64),
+                    child: pickedImageBase64 == null
+                        ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28)
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  pickedImageBase64 == null ? 'Add Member Photo (Max 5MB)' : 'Photo Selected (Compressed)',
+                  style: TextStyle(fontSize: 12, color: Colors.teal.shade800, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 12),
                 TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
                 const SizedBox(height: 12),
                 TextField(controller: ageCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Age')),
@@ -79,6 +112,7 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
                     age,
                     gender,
                     relCtrl.text,
+                    profileImage: pickedImageBase64,
                   );
                   if (!mounted || !context.mounted) return;
                   Navigator.pop(ctx);
@@ -156,10 +190,13 @@ class _FamilyDetailScreenState extends State<FamilyDetailScreen> {
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         leading: CircleAvatar(
                           backgroundColor: Colors.teal.shade100,
-                          child: Icon(
-                            member['gender'] == 'male' ? Icons.male : (member['gender'] == 'female' ? Icons.female : Icons.person),
-                            color: Colors.teal.shade800,
-                          ),
+                          backgroundImage: ImageUtils.safeBase64Image(member['profile_image']?.toString()),
+                          child: ImageUtils.safeBase64Image(member['profile_image']?.toString()) != null
+                              ? null
+                              : Icon(
+                                  member['gender'] == 'male' ? Icons.male : (member['gender'] == 'female' ? Icons.female : Icons.person),
+                                  color: Colors.teal.shade800,
+                                ),
                         ),
                         title: Row(
                           children: [

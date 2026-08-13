@@ -1,8 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import '../services/local_db_service.dart';
+import '../services/image_utils.dart';
 import 'login_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -117,31 +115,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         children: [
                           GestureDetector(
                             onTap: () async {
-                              final result = await FilePicker.pickFiles(
-                                type: FileType.image,
-                                allowMultiple: false,
-                              );
-                              if (result != null) {
-                                if (result.files.single.bytes != null) {
-                                  final bytes = result.files.single.bytes!;
-                                  setDialogState(() {
-                                    pickedImageBase64 = base64Encode(bytes);
-                                  });
-                                } else if (result.files.single.path != null) {
-                                  final file = File(result.files.single.path!);
-                                  final bytes = await file.readAsBytes();
-                                  setDialogState(() {
-                                    pickedImageBase64 = base64Encode(bytes);
-                                  });
-                                }
+                              final compressedBase64 = await ImageUtils.pickAndCompressImage(context);
+                              if (compressedBase64 != null) {
+                                setDialogState(() {
+                                  pickedImageBase64 = compressedBase64;
+                                });
                               }
                             },
                             child: CircleAvatar(
                               radius: 36,
                               backgroundColor: Colors.teal.shade50,
-                              backgroundImage: pickedImageBase64 != null
-                                  ? MemoryImage(base64Decode(pickedImageBase64!))
-                                  : null,
+                              backgroundImage: ImageUtils.safeBase64Image(pickedImageBase64),
                               child: pickedImageBase64 == null
                                   ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28)
                                   : null,
@@ -149,7 +133,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            pickedImageBase64 == null ? 'Add Profile Photo (Optional)' : 'Photo Selected',
+                            pickedImageBase64 == null ? 'Add Profile Photo (Max 5MB)' : 'Photo Selected (Compressed)',
                             style: TextStyle(fontSize: 12, color: Colors.teal.shade800, fontWeight: FontWeight.w500),
                           ),
                         ],
@@ -275,6 +259,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (usernameCtrl.text.isNotEmpty && phoneCtrl.text.isNotEmpty && selectedStateId != null) {
+                    final messenger = ScaffoldMessenger.of(context);
                     final ok = await LocalDbService.addASHAWorker(
                       token: widget.token,
                       username: usernameCtrl.text.trim(),
@@ -288,12 +273,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(ok ? 'ASHA Worker Registered!' : 'Failed. Check all fields.'),
-                        backgroundColor: ok ? Colors.green : Colors.redAccent,
-                      ));
-                    }
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(ok ? 'ASHA Worker Registered!' : 'Failed. Check all fields.'),
+                      backgroundColor: ok ? Colors.green : Colors.redAccent,
+                    ));
                     if (ok) _refreshData();
                   }
                 },
@@ -365,31 +348,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         children: [
                           GestureDetector(
                             onTap: () async {
-                              final result = await FilePicker.pickFiles(
-                                type: FileType.image,
-                                allowMultiple: false,
-                              );
-                              if (result != null) {
-                                if (result.files.single.bytes != null) {
-                                  final bytes = result.files.single.bytes!;
-                                  setDialogState(() {
-                                    pickedImageBase64 = base64Encode(bytes);
-                                  });
-                                } else if (result.files.single.path != null) {
-                                  final file = File(result.files.single.path!);
-                                  final bytes = await file.readAsBytes();
-                                  setDialogState(() {
-                                    pickedImageBase64 = base64Encode(bytes);
-                                  });
-                                }
+                              final compressedBase64 = await ImageUtils.pickAndCompressImage(context);
+                              if (compressedBase64 != null) {
+                                setDialogState(() {
+                                  pickedImageBase64 = compressedBase64;
+                                });
                               }
                             },
                             child: CircleAvatar(
                               radius: 36,
                               backgroundColor: Colors.teal.shade50,
-                              backgroundImage: pickedImageBase64 != null
-                                  ? MemoryImage(base64Decode(pickedImageBase64!))
-                                  : null,
+                              backgroundImage: ImageUtils.safeBase64Image(pickedImageBase64),
                               child: pickedImageBase64 == null
                                   ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28)
                                   : null,
@@ -397,7 +366,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            pickedImageBase64 == null ? 'Add Profile Photo (Optional)' : 'Photo Selected',
+                            pickedImageBase64 == null ? 'Add Profile Photo (Max 5MB)' : 'Photo Selected (Compressed)',
                             style: TextStyle(fontSize: 12, color: Colors.teal.shade800, fontWeight: FontWeight.w500),
                           ),
                         ],
@@ -523,6 +492,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (usernameCtrl.text.isNotEmpty && phoneCtrl.text.isNotEmpty && selectedStateId != null) {
+                    final messenger = ScaffoldMessenger.of(context);
                     final ok = await LocalDbService.editASHAWorker(
                       token: widget.token,
                       userId: userId, // Pass the userId here
@@ -537,12 +507,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(ok ? 'ASHA Worker Updated!' : 'Failed to update worker.'),
-                        backgroundColor: ok ? Colors.green : Colors.redAccent,
-                      ));
-                    }
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(ok ? 'ASHA Worker Updated!' : 'Failed to update worker.'),
+                      backgroundColor: ok ? Colors.green : Colors.redAccent,
+                    ));
                     if (ok) _refreshData(); // Refresh the list if successful
                   }
                 },
@@ -629,18 +597,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (selectedDistrictId != null && wardCtrl.text.isNotEmpty) {
+                    final messenger = ScaffoldMessenger.of(context);
                     final ok = await LocalDbService.addArea(
                       widget.token, selectedDistrictId!,
                       blockCtrl.text.trim(), wardCtrl.text.trim(),
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(ok ? 'Area Created!' : 'Failed to create area.'),
-                        backgroundColor: ok ? Colors.green : Colors.redAccent,
-                      ));
-                    }
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(ok ? 'Area Created!' : 'Failed to create area.'),
+                      backgroundColor: ok ? Colors.green : Colors.redAccent,
+                    ));
                     if (ok) _refreshData();
                   }
                 },
@@ -669,15 +636,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               if (stateCtrl.text.isNotEmpty) {
+                final messenger = ScaffoldMessenger.of(context);
                 final ok = await LocalDbService.addState(widget.token, stateCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(ok ? 'State Created!' : 'Failed. State may already exist.'),
-                    backgroundColor: ok ? Colors.green : Colors.redAccent,
-                  ));
-                }
+                messenger.showSnackBar(SnackBar(
+                  content: Text(ok ? 'State Created!' : 'Failed. State may already exist.'),
+                  backgroundColor: ok ? Colors.green : Colors.redAccent,
+                ));
                 if (ok) _refreshData();
               }
             },
@@ -769,17 +735,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (districtCtrl.text.isNotEmpty) {
+                    final messenger = ScaffoldMessenger.of(context);
                     final ok = await LocalDbService.addDistrict(
                       widget.token, selectedStateId, districtCtrl.text.trim(),
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(ok ? 'District Created!' : 'Failed to create district.'),
-                        backgroundColor: ok ? Colors.green : Colors.redAccent,
-                      ));
-                    }
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(ok ? 'District Created!' : 'Failed to create district.'),
+                      backgroundColor: ok ? Colors.green : Colors.redAccent,
+                    ));
                     if (ok) _refreshData();
                   }
                 },
@@ -808,15 +773,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               if (districtCtrl.text.isNotEmpty) {
+                final messenger = ScaffoldMessenger.of(context);
                 final ok = await LocalDbService.editDistrict(widget.token, district['id'].toString(), district['state_id'].toString(), districtCtrl.text.trim());
                 if (!mounted) return;
                 Navigator.pop(ctx);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(ok ? 'District Updated!' : 'Failed to update district.'),
-                    backgroundColor: ok ? Colors.green : Colors.redAccent,
-                  ));
-                }
+                messenger.showSnackBar(SnackBar(
+                  content: Text(ok ? 'District Updated!' : 'Failed to update district.'),
+                  backgroundColor: ok ? Colors.green : Colors.redAccent,
+                ));
                 if (ok) _refreshData();
               }
             },
@@ -909,18 +873,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
                 onPressed: () async {
                   if (selectedDistrictId != null && wardCtrl.text.isNotEmpty) {
+                    final messenger = ScaffoldMessenger.of(context);
                     final ok = await LocalDbService.editArea(
                       widget.token, area['id'].toString(), selectedDistrictId!,
                       blockCtrl.text.trim(), wardCtrl.text.trim(),
                     );
                     if (!mounted) return;
                     Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(ok ? 'Area Updated!' : 'Failed to update area.'),
-                        backgroundColor: ok ? Colors.green : Colors.redAccent,
-                      ));
-                    }
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(ok ? 'Area Updated!' : 'Failed to update area.'),
+                      backgroundColor: ok ? Colors.green : Colors.redAccent,
+                    ));
                     if (ok) _refreshData();
                   }
                 },
@@ -944,7 +907,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           onPressed: () async {
             final ok = await LocalDbService.deleteState(widget.token, state['id'].toString());
             if (!mounted) return;
-            Navigator.pop(ctx);
+            if (ctx.mounted) Navigator.pop(ctx);
             if (ok) _refreshData();
           },
           child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -964,7 +927,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           onPressed: () async {
             final ok = await LocalDbService.deleteDistrict(widget.token, district['id'].toString());
             if (!mounted) return;
-            Navigator.pop(ctx);
+            if (ctx.mounted) Navigator.pop(ctx);
             if (ok) _refreshData();
           },
           child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -984,7 +947,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           onPressed: () async {
             final ok = await LocalDbService.deleteArea(widget.token, area['id'].toString());
             if (!mounted) return;
-            Navigator.pop(ctx);
+            if (ctx.mounted) Navigator.pop(ctx);
             if (ok) _refreshData();
           },
           child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -1129,7 +1092,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           onPressed: () async {
             final ok = await LocalDbService.deleteASHAWorker(widget.token, worker['id'].toString());
             if (!mounted) return;
-            Navigator.pop(ctx);
+            if (ctx.mounted) Navigator.pop(ctx);
             if (ok) _refreshData();
           },
           child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -1162,10 +1125,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             CircleAvatar(
               radius: 24,
               backgroundColor: Colors.teal.shade100,
-              backgroundImage: (worker['profile_image'] != null && worker['profile_image'].toString().isNotEmpty)
-                  ? MemoryImage(base64Decode(worker['profile_image'].toString()))
-                  : null,
-              child: (worker['profile_image'] != null && worker['profile_image'].toString().isNotEmpty)
+              backgroundImage: ImageUtils.safeBase64Image(worker['profile_image']?.toString()),
+              child: ImageUtils.safeBase64Image(worker['profile_image']?.toString()) != null
                   ? null
                   : Text(initial, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Color(0xFF004D40))),
             ),

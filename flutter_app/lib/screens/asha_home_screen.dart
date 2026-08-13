@@ -1,6 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/local_db_service.dart';
+import '../services/image_utils.dart';
 import 'login_screen.dart';
 import 'family_detail_screen.dart';
 
@@ -246,21 +246,21 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: (profileImage != null && profileImage.isNotEmpty)
+                      gradient: ImageUtils.safeBase64Image(profileImage) != null
                           ? null
                           : LinearGradient(
                               colors: [Colors.teal.shade200, Colors.teal.shade600],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                      image: (profileImage != null && profileImage.isNotEmpty)
+                      image: ImageUtils.safeBase64Image(profileImage) != null
                           ? DecorationImage(
-                              image: MemoryImage(base64Decode(profileImage)),
+                              image: ImageUtils.safeBase64Image(profileImage)!,
                               fit: BoxFit.cover,
                             )
                           : null,
                     ),
-                    child: (profileImage != null && profileImage.isNotEmpty)
+                    child: ImageUtils.safeBase64Image(profileImage) != null
                         ? null
                         : Center(
                             child: Text(

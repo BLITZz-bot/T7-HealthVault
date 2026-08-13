@@ -17,7 +17,7 @@ class LocalDbService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE users(
@@ -82,7 +82,8 @@ class LocalDbService {
             full_name TEXT,
             age INTEGER,
             gender TEXT,
-            relationship_to_head TEXT
+            relationship_to_head TEXT,
+            profile_image TEXT
           )
         ''');
 
@@ -121,6 +122,17 @@ class LocalDbService {
             // Ignore if column already exists
           }
         }
+        if (oldVersion < 3) {
+          try {
+            await db.execute('ALTER TABLE members ADD COLUMN profile_image TEXT');
+          } catch (e) {
+            // Ignore if column already exists
+          }
+        }
+        // Repair/sanitize any legacy oversized base64 images that caused CursorWindow errors
+        try {
+          await db.execute('UPDATE users SET profile_image = NULL WHERE length(profile_image) > 150000');
+        } catch (_) {}
       },
     );
   }
@@ -294,7 +306,15 @@ class LocalDbService {
     return result;
   }
 
-  static Future<bool> addMember(String token, String familyId, String fullName, int age, String gender, String relationship) async {
+  static Future<bool> addMember(
+    String token,
+    String familyId,
+    String fullName,
+    int age,
+    String gender,
+    String relationship, {
+    String? profileImage,
+  }) async {
     final db = await database;
     await db.insert('members', {
       'family_id': int.parse(familyId),
@@ -302,7 +322,31 @@ class LocalDbService {
       'age': age,
       'gender': gender,
       'relationship_to_head': relationship,
+      'profile_image': profileImage,
     });
+    return true;
+  }
+
+  static Future<bool> updateMember({
+    required String token,
+    required String memberId,
+    required String fullName,
+    required int age,
+    required String gender,
+    required String relationship,
+    String? profileImage,
+  }) async {
+    final db = await database;
+    final Map<String, dynamic> values = {
+      'full_name': fullName,
+      'age': age,
+      'gender': gender,
+      'relationship_to_head': relationship,
+    };
+    if (profileImage != null) {
+      values['profile_image'] = profileImage;
+    }
+    await db.update('members', values, where: 'id = ?', whereArgs: [int.parse(memberId)]);
     return true;
   }
 

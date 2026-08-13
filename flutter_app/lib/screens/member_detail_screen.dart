@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../services/local_db_service.dart';
+import '../services/image_utils.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: compute a flag color from a record map
@@ -40,11 +41,13 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   late TabController _tabController;
   late Future<List<dynamic>> _historyFuture;
   late Future<Map<String, dynamic>> _analyticsFuture;
+  late Map<String, dynamic> _currentMember;
   String _selectedTimeRange = 'all'; // Default time range for analytics
 
   @override
   void initState() {
     super.initState();
+    _currentMember = Map<String, dynamic>.from(widget.member);
     _tabController = TabController(length: 2, vsync: this);
     _refresh();
   }
@@ -78,6 +81,116 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
       default:
         return null;
     }
+  }
+
+  void _showEditMemberDialog() {
+    final nameCtrl = TextEditingController(text: _currentMember['full_name']?.toString() ?? '');
+    final ageCtrl = TextEditingController(text: _currentMember['age']?.toString() ?? '');
+    final relCtrl = TextEditingController(text: _currentMember['relationship_to_head']?.toString() ?? '');
+    String gender = _currentMember['gender']?.toString().toLowerCase() ?? 'male';
+    if (gender != 'male' && gender != 'female' && gender != 'other') gender = 'male';
+    String? pickedImageBase64 = _currentMember['profile_image']?.toString();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.edit, color: Color(0xFF00796B)),
+              SizedBox(width: 8),
+              Text('Edit Member Details'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () async {
+                    final compressedBase64 = await ImageUtils.pickAndCompressImage(context);
+                    if (compressedBase64 != null) {
+                      setModalState(() {
+                        pickedImageBase64 = compressedBase64;
+                      });
+                    }
+                  },
+                  child: CircleAvatar(
+                    radius: 36,
+                    backgroundColor: Colors.teal.shade50,
+                    backgroundImage: ImageUtils.safeBase64Image(pickedImageBase64),
+                    child: pickedImageBase64 == null
+                        ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28)
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  pickedImageBase64 == null ? 'Add Member Photo (Max 5MB)' : 'Photo Selected (Compressed)',
+                  style: TextStyle(fontSize: 12, color: Colors.teal.shade800, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 12),
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
+                const SizedBox(height: 12),
+                TextField(controller: ageCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Age')),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: gender,
+                  decoration: const InputDecoration(labelText: 'Gender'),
+                  items: const [
+                    DropdownMenuItem(value: 'male', child: Text('Male')),
+                    DropdownMenuItem(value: 'female', child: Text('Female')),
+                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => gender = val);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(controller: relCtrl, decoration: const InputDecoration(labelText: 'Relationship to Head')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameCtrl.text.isNotEmpty && ageCtrl.text.isNotEmpty && relCtrl.text.isNotEmpty) {
+                  final age = int.tryParse(ageCtrl.text) ?? 0;
+                  final ok = await LocalDbService.updateMember(
+                    token: widget.token,
+                    memberId: _currentMember['id'].toString(),
+                    fullName: nameCtrl.text,
+                    age: age,
+                    gender: gender,
+                    relationship: relCtrl.text,
+                    profileImage: pickedImageBase64,
+                  );
+                  if (!mounted || !context.mounted) return;
+                  Navigator.pop(ctx);
+                  if (ok) {
+                    setState(() {
+                      _currentMember['full_name'] = nameCtrl.text;
+                      _currentMember['age'] = age;
+                      _currentMember['gender'] = gender;
+                      _currentMember['relationship_to_head'] = relCtrl.text;
+                      if (pickedImageBase64 != null) {
+                        _currentMember['profile_image'] = pickedImageBase64;
+                      }
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Member details updated!'), backgroundColor: Colors.green),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save Changes'),
+            )
+          ],
+        ),
+      ),
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -320,7 +433,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   // ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final name = widget.member['full_name'] ?? 'Member';
+    final name = _currentMember['full_name'] ?? 'Member';
     final currentFlag = widget.member['current_flag'] as String?;
 
     return Scaffold(
@@ -328,17 +441,47 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF004D40),
         foregroundColor: Colors.white,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(
-              'Age: ${widget.member['age']} • ${widget.member['gender']} • ${widget.member['relationship_to_head']}',
-              style: const TextStyle(fontSize: 11, color: Colors.tealAccent),
+            GestureDetector(
+              onTap: _showEditMemberDialog,
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.teal.shade200,
+                backgroundImage: ImageUtils.safeBase64Image(_currentMember['profile_image']?.toString()),
+                child: ImageUtils.safeBase64Image(_currentMember['profile_image']?.toString()) != null
+                    ? null
+                    : Icon(
+                        _currentMember['gender'] == 'male'
+                            ? Icons.male
+                            : (_currentMember['gender'] == 'female' ? Icons.female : Icons.person),
+                        color: Colors.teal.shade900,
+                        size: 20,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                  Text(
+                    'Age: ${_currentMember['age']} • ${_currentMember['gender']} • ${_currentMember['relationship_to_head']}',
+                    style: const TextStyle(fontSize: 11, color: Colors.tealAccent),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.white),
+            tooltip: 'Edit Member / Photo',
+            onPressed: _showEditMemberDialog,
+          ),
           if (currentFlag != null)
             Padding(
               padding: const EdgeInsets.only(right: 12),
