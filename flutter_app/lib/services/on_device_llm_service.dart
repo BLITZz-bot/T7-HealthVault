@@ -18,19 +18,38 @@ class OnDeviceLLMService {
   static final ValueNotifier<bool> isDownloadingNotifier = ValueNotifier<bool>(false);
   static final ValueNotifier<double> downloadProgressNotifier = ValueNotifier<double>(0.0);
   static final ValueNotifier<String> downloadStatusNotifier = ValueNotifier<String>('');
+  static final ValueNotifier<int> bytesDownloadedNotifier = ValueNotifier<int>(0);
+  static final ValueNotifier<int> totalBytesNotifier = ValueNotifier<int>(estimatedSizeBytes);
 
   static bool _initialized = false;
+  static http.Client? _activeClient;
+  static bool _cancelRequested = false;
 
   /// Check if model exists locally on startup
   static Future<void> initialize() async {
     if (_initialized) return;
-    final file = await getModelFile();
-    if (await file.exists() && (await file.length()) > 500 * 1024 * 1024) {
-      isModelDownloadedNotifier.value = true;
-      downloadStatusNotifier.value = 'T7 Clinical AI Ready (On-Device)';
-    } else {
+    try {
+      final file = await getModelFile();
+      final exists = await file.exists();
+      if (exists) {
+        final length = await file.length();
+        // If file is larger than 500 MB, it's considered valid
+        if (length > 500 * 1024 * 1024) {
+          isModelDownloadedNotifier.value = true;
+          downloadProgressNotifier.value = 1.0;
+          bytesDownloadedNotifier.value = length;
+          totalBytesNotifier.value = length;
+          final mb = (length / (1024 * 1024)).toStringAsFixed(1);
+          downloadStatusNotifier.value = 'T7 Clinical AI Ready ($mb MB On-Device)';
+          _initialized = true;
+          return;
+        }
+      }
       isModelDownloadedNotifier.value = false;
-      downloadStatusNotifier.value = 'Model Not Downloaded (~986 MB)';
+      downloadStatusNotifier.value = 'Ready (Built-in Engine Active) • Optional GGUF Model (~986 MB)';
+    } catch (e) {
+      isModelDownloadedNotifier.value = false;
+      downloadStatusNotifier.value = 'Engine Ready: Built-in Clinical Intelligence';
     }
     _initialized = true;
   }
@@ -45,52 +64,134 @@ class OnDeviceLLMService {
     return File('${modelsDir.path}/$modelFileName');
   }
 
-  /// Download GGUF Model weights with progress tracking
+  /// Check exact model size on disk
+  static Future<int> getLocalModelSize() async {
+    try {
+      final file = await getModelFile();
+      if (await file.exists()) {
+        return await file.length();
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Cancel an ongoing download
+  static void cancelDownload() {
+    _cancelRequested = true;
+    _activeClient?.close();
+    _activeClient = null;
+    isDownloadingNotifier.value = false;
+    downloadStatusNotifier.value = 'Download Cancelled';
+  }
+
+  /// Download GGUF Model weights with progress tracking, speed, and ETA
   static Future<bool> downloadModel({Function(double progress, String status)? onProgress}) async {
     if (isDownloadingNotifier.value) return false;
     isDownloadingNotifier.value = true;
+    _cancelRequested = false;
     downloadProgressNotifier.value = 0.0;
-    downloadStatusNotifier.value = 'Connecting to HuggingFace...';
+    bytesDownloadedNotifier.value = 0;
+    downloadStatusNotifier.value = 'Connecting to HuggingFace repository...';
+
+    IOSink? sink;
+    File? tempFile;
 
     try {
-      final file = await getModelFile();
+      final targetFile = await getModelFile();
+      tempFile = File('${targetFile.path}.tmp');
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+
+      _activeClient = http.Client();
       final request = http.Request('GET', Uri.parse(modelDownloadUrl));
-      final response = await http.Client().send(request);
+      request.headers['User-Agent'] = 'T7-HealthVault-Mobile/1.0';
+
+      final response = await _activeClient!.send(request);
 
       if (response.statusCode != 200) {
-        throw Exception('Download failed with status code ${response.statusCode}');
+        throw Exception('Server returned HTTP ${response.statusCode}');
       }
 
       final contentLength = response.contentLength ?? estimatedSizeBytes;
+      totalBytesNotifier.value = contentLength;
       int bytesDownloaded = 0;
 
-      final sink = file.openWrite();
+      sink = tempFile.openWrite(mode: FileMode.write);
+      final startTime = DateTime.now();
+      var lastNotifyTime = DateTime.now();
 
       await for (final chunk in response.stream) {
+        if (_cancelRequested) {
+          throw Exception('Download cancelled by user.');
+        }
+
         bytesDownloaded += chunk.length;
         sink.add(chunk);
+        bytesDownloadedNotifier.value = bytesDownloaded;
 
-        final progress = (bytesDownloaded / contentLength).clamp(0.0, 1.0);
-        downloadProgressNotifier.value = progress;
-        
-        final mbDownloaded = (bytesDownloaded / (1024 * 1024)).toStringAsFixed(1);
-        final mbTotal = (contentLength / (1024 * 1024)).toStringAsFixed(1);
-        final statusStr = 'Downloading T7 Clinical AI: $mbDownloaded / $mbTotal MB (${(progress * 100).toStringAsFixed(1)}%)';
+        final now = DateTime.now();
+        // Throttle UI notification to every 100ms for smooth 60fps rendering
+        if (now.difference(lastNotifyTime).inMilliseconds >= 100 || bytesDownloaded >= contentLength) {
+          lastNotifyTime = now;
+          final progress = (bytesDownloaded / contentLength).clamp(0.0, 1.0);
+          downloadProgressNotifier.value = progress;
 
-        downloadStatusNotifier.value = statusStr;
-        if (onProgress != null) {
-          onProgress(progress, statusStr);
+          final elapsedSeconds = now.difference(startTime).inMilliseconds / 1000.0;
+          final speedBytesPerSec = elapsedSeconds > 0 ? (bytesDownloaded / elapsedSeconds) : 0.0;
+          final speedMbps = (speedBytesPerSec / (1024 * 1024)).toStringAsFixed(1);
+
+          final mbDownloaded = (bytesDownloaded / (1024 * 1024)).toStringAsFixed(1);
+          final mbTotal = (contentLength / (1024 * 1024)).toStringAsFixed(1);
+
+          final remainingBytes = contentLength - bytesDownloaded;
+          final etaSeconds = speedBytesPerSec > 0 ? (remainingBytes / speedBytesPerSec).round() : 0;
+          final etaStr = etaSeconds > 60 ? '${(etaSeconds / 60).toStringAsFixed(1)} min' : '${etaSeconds}s';
+
+          final statusStr = '$mbDownloaded / $mbTotal MB (${(progress * 100).toStringAsFixed(1)}%) • $speedMbps MB/s • ETA: $etaStr';
+          downloadStatusNotifier.value = statusStr;
+
+          if (onProgress != null) {
+            onProgress(progress, statusStr);
+          }
         }
       }
 
+      await sink.flush();
       await sink.close();
+      sink = null;
+
+      // Rename tmp file to final destination
+      if (await targetFile.exists()) {
+        await targetFile.delete();
+      }
+      await tempFile.rename(targetFile.path);
+
       isModelDownloadedNotifier.value = true;
       isDownloadingNotifier.value = false;
-      downloadStatusNotifier.value = 'T7 Clinical AI Ready (On-Device GGUF)';
+      downloadProgressNotifier.value = 1.0;
+      final finalMb = (bytesDownloaded / (1024 * 1024)).toStringAsFixed(1);
+      downloadStatusNotifier.value = 'T7 Clinical AI Ready ($finalMb MB On-Device)';
+      _activeClient = null;
       return true;
     } catch (e) {
+      if (sink != null) {
+        try {
+          await sink.close();
+        } catch (_) {}
+      }
+      if (tempFile != null && await tempFile.exists()) {
+        try {
+          await tempFile.delete();
+        } catch (_) {}
+      }
       isDownloadingNotifier.value = false;
-      downloadStatusNotifier.value = 'Download Error: ${e.toString()}';
+      _activeClient = null;
+      if (_cancelRequested) {
+        downloadStatusNotifier.value = 'Download cancelled by user.';
+      } else {
+        downloadStatusNotifier.value = 'Download failed: ${e.toString().replaceAll('Exception: ', '')}';
+      }
       return false;
     }
   }
@@ -101,8 +202,14 @@ class OnDeviceLLMService {
     if (await file.exists()) {
       await file.delete();
     }
+    final tempFile = File('${file.path}.tmp');
+    if (await tempFile.exists()) {
+      await tempFile.delete();
+    }
     isModelDownloadedNotifier.value = false;
-    downloadStatusNotifier.value = 'Model Deleted (~986 MB Freed)';
+    downloadProgressNotifier.value = 0.0;
+    bytesDownloadedNotifier.value = 0;
+    downloadStatusNotifier.value = 'Model Deleted (~986 MB Freed) • Built-in AI Active';
   }
 
   /// Generate Generative Clinical Explanation using T7 Clinical AI
