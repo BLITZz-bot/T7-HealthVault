@@ -1,9 +1,12 @@
 # T7 HealthVault — Intelligent Offline Clinical EHR & Sepsis Early Warning System
 
+[![Download Latest APK](https://img.shields.io/badge/Download-Latest%20Release%20APK-00796B?style=for-the-badge&logo=android&logoColor=white)](https://github.com/BLITZz-bot/T7-HealthVault/releases/latest/download/app-release.apk)
+[![GitHub Release](https://img.shields.io/github/v/release/BLITZz-bot/T7-HealthVault?style=for-the-badge&color=teal)](https://github.com/BLITZz-bot/T7-HealthVault/releases/latest)
+
 **Developer & Author:** M M Bharath  
-**Version:** 2.1.0 (Clinical Intelligence & Multilingual Edition)  
-**Platform:** Flutter (Android APK, Desktop: Windows / Linux / macOS)  
-**Release APK:** `flutter_app/build/app/outputs/flutter-apk/app-release.apk` (81.0 MB)
+**Version:** 1.0.0 (Clinical Intelligence & Multilingual Edition)  
+**Direct APK Download:** [👉 Click here to download latest `app-release.apk`](https://github.com/BLITZz-bot/T7-HealthVault/releases/latest/download/app-release.apk)  
+**Releases Page:** [View all GitHub Releases](https://github.com/BLITZz-bot/T7-HealthVault/releases)
 
 ---
 
