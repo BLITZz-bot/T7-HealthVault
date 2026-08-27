@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/local_db_service.dart';
+import '../services/app_update_service.dart';
 import '../widgets/language_switcher_widget.dart';
 import '../widgets/searchable_dropdown.dart';
 
@@ -807,6 +808,76 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   _buildInfoRow('Network Mode', '100% Offline-First (No Internet Required)'),
                   const Divider(height: 20),
                   _buildInfoRow('Language Support', '22 Official Indian Languages Built-in'),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // App Updates Section
+            _buildSectionHeader(
+              icon: Icons.system_update_rounded,
+              title: 'App Updates & Releases',
+              subtitle: 'Check for the latest APK releases directly from GitHub',
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(6),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.cloud_download_rounded, color: Color(0xFF00796B), size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Current Version: v${AppUpdateService.currentVersion}',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Auto-built via GitHub Releases CI/CD',
+                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00796B),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                        onPressed: () => AppUpdateService.checkAndPromptUpdate(context),
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
