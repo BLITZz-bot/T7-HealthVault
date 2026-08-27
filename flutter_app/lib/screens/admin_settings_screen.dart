@@ -3,6 +3,7 @@ import '../services/local_db_service.dart';
 import '../services/app_update_service.dart';
 import '../widgets/language_switcher_widget.dart';
 import '../widgets/searchable_dropdown.dart';
+import 'master_jurisdiction_editor_screen.dart';
 
 class AdminSettingsScreen extends StatefulWidget {
   final String token;
@@ -656,6 +657,44 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                         ),
                       ],
                     ),
+                  ),
+
+                  const Divider(height: 1),
+
+                  // Manage & Edit All Jurisdictions Tile
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.edit_location_alt_rounded, color: Color(0xFF00796B), size: 24),
+                    ),
+                    title: const Text(
+                      'Manage & Edit Jurisdictions',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF263238)),
+                    ),
+                    subtitle: const Text(
+                      'Open full editor to rename or delete states, districts & areas.',
+                      style: TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black38),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MasterJurisdictionEditorScreen(
+                            token: widget.token,
+                            user: widget.user,
+                          ),
+                        ),
+                      );
+                      setState(() {
+                        _statsFuture = LocalDbService.getSystemStats();
+                      });
+                    },
                   ),
 
                   const Divider(height: 1),

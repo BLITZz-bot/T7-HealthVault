@@ -6,6 +6,7 @@ import '../widgets/language_switcher_widget.dart';
 import '../widgets/searchable_dropdown.dart';
 import 'login_screen.dart';
 import 'admin_settings_screen.dart';
+import 'state_jurisdiction_detail_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final String token;
@@ -366,85 +367,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     });
   }
 
-  void _showEditStateDialog(Map<String, dynamic> state) {
-    final stateCtrl = TextEditingController(text: state['name']);
-    showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Edit State'),
-      content: TextField(controller: stateCtrl, decoration: const InputDecoration(labelText: 'State Name')),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ElevatedButton(onPressed: () async {
-          await LocalDbService.editState(widget.token, state['id'].toString(), stateCtrl.text.trim());
-          if (mounted) { Navigator.pop(ctx); _refreshData(); }
-        }, child: const Text('Update')),
-      ],
-    ));
-  }
-
-  void _showEditDistrictDialog(Map<String, dynamic> district) {
-    final districtCtrl = TextEditingController(text: district['name']);
-    showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Edit District'),
-      content: TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'District Name')),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ElevatedButton(onPressed: () async {
-          await LocalDbService.editDistrict(widget.token, district['id'].toString(), district['state_id'].toString(), districtCtrl.text.trim());
-          if (mounted) { Navigator.pop(ctx); _refreshData(); }
-        }, child: const Text('Update')),
-      ],
-    ));
-  }
-
-  void _showEditAreaDialog(Map<String, dynamic> area) {
-    Future.wait([LocalDbService.getStates(widget.token), LocalDbService.getDistricts(widget.token)]).then((results) {
-      if (!mounted) return;
-      final states = results[0];
-      final districts = results[1];
-      final blockCtrl = TextEditingController(text: area['block']);
-      final wardCtrl = TextEditingController(text: area['village_or_ward']);
-      String? selectedDistrictId = area['district_id']?.toString();
-      String? selectedStateId;
-      if (selectedDistrictId != null) {
-        final d = _firstWhereOrNull(districts, (d) => d['id'].toString() == selectedDistrictId);
-        if (d != null) selectedStateId = d['state_id']?.toString();
-      }
-
-      showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setModalState) => AlertDialog(
-        title: const Text('Edit Area'),
-        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SearchableDropdown<dynamic>(
-            items: states, labelText: 'Select State',
-            itemToString: (s) => s['name'] ?? 'State',
-            initialValue: _firstWhereOrNull(states, (s) => s['id'].toString() == selectedStateId),
-            onChanged: (val) => setModalState(() { selectedStateId = val?['id'].toString(); selectedDistrictId = null; }),
-          ),
-          if (selectedStateId != null) ...[
-            const SizedBox(height: 10),
-            SearchableDropdown<dynamic>(
-              items: districts.where((d) => d['state_id'].toString() == selectedStateId).toList(),
-              labelText: 'Select District',
-              itemToString: (d) => d['name'] ?? 'District',
-              initialValue: _firstWhereOrNull(districts, (d) => d['id'].toString() == selectedDistrictId),
-              onChanged: (val) => setModalState(() => selectedDistrictId = val?['id'].toString()),
-            ),
-          ],
-          TextField(controller: blockCtrl, decoration: const InputDecoration(labelText: 'Block')),
-          TextField(controller: wardCtrl, decoration: const InputDecoration(labelText: 'Village/Ward')),
-        ])),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () async {
-            if (selectedDistrictId != null) {
-              await LocalDbService.editArea(widget.token, area['id'].toString(), selectedDistrictId!, blockCtrl.text.trim(), wardCtrl.text.trim());
-              if (mounted) { Navigator.pop(ctx); _refreshData(); }
-            }
-          }, child: const Text('Update')),
-        ],
-      )));
-    });
-  }
-
   void _deleteWorker(Map<String, dynamic> worker) {
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: const Text('Delete Worker?'),
@@ -453,48 +375,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () async {
           await LocalDbService.deleteASHAWorker(widget.token, worker['id'].toString());
-          if (mounted) { Navigator.pop(ctx); _refreshData(); }
-        }, child: const Text('Delete', style: TextStyle(color: Colors.white))),
-      ]
-    ));
-  }
-
-  void _deleteState(Map<String, dynamic> state) {
-    showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Delete State?'),
-      content: Text('Delete ${state["name"]} and all its data?'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () async {
-          await LocalDbService.deleteState(widget.token, state['id'].toString());
-          if (mounted) { Navigator.pop(ctx); _refreshData(); }
-        }, child: const Text('Delete', style: TextStyle(color: Colors.white))),
-      ]
-    ));
-  }
-
-  void _deleteDistrict(Map<String, dynamic> district) {
-    showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Delete District?'),
-      content: Text('Delete ${district["name"]}?'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () async {
-          await LocalDbService.deleteDistrict(widget.token, district['id'].toString());
-          if (mounted) { Navigator.pop(ctx); _refreshData(); }
-        }, child: const Text('Delete', style: TextStyle(color: Colors.white))),
-      ]
-    ));
-  }
-
-  void _deleteArea(Map<String, dynamic> area) {
-    showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Delete Area?'),
-      content: Text('Delete ${area["village_or_ward"]}?'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () async {
-          await LocalDbService.deleteArea(widget.token, area['id'].toString());
           if (mounted) { Navigator.pop(ctx); _refreshData(); }
         }, child: const Text('Delete', style: TextStyle(color: Colors.white))),
       ]
@@ -769,7 +649,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   );
                 }
               }
-              return _buildStateExpansionCard(states[index], districts, areas);
+              return _buildStateCard(states[index], districts, areas);
             },
           )),
         ]);
@@ -777,47 +657,120 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _buildStateExpansionCard(Map<String, dynamic> state, List<dynamic> allDistricts, List<dynamic> allAreas) {
+  Widget _buildStateCard(Map<String, dynamic> state, List<dynamic> allDistricts, List<dynamic> allAreas) {
     final stateId = state['id'].toString();
     final stateDistricts = allDistricts.where((d) => d['state_id'].toString() == stateId).toList();
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ExpansionTile(
-        leading: const Icon(Icons.flag, color: Colors.teal),
-        title: Text(state['name'], style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF263238))),
-        subtitle: Text('${stateDistricts.length} Districts', style: const TextStyle(fontSize: 11)),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.teal), onPressed: () => _showEditStateDialog(state)),
-          IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), onPressed: () => _deleteState(state)),
-          const Icon(Icons.expand_more),
-        ]),
-        children: stateDistricts.map((d) => _buildDistrictTile(d, allAreas)).toList(),
-      ),
-    );
-  }
+    final stateAreasCount = allAreas.where((a) {
+      final dId = a['district_id']?.toString();
+      return stateDistricts.any((d) => d['id'].toString() == dId);
+    }).length;
 
-  Widget _buildDistrictTile(Map<String, dynamic> district, List<dynamic> allAreas) {
-    final districtId = district['id'].toString();
-    final districtAreas = allAreas.where((a) => a['district_id'].toString() == districtId).toList();
-    return ExpansionTile(
-      dense: true,
-      title: Text(district['name'], style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text('${districtAreas.length} Areas', style: const TextStyle(fontSize: 10)),
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.teal), onPressed: () => _showEditDistrictDialog(district)),
-        IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent), onPressed: () => _deleteDistrict(district)),
-        const Icon(Icons.expand_more, size: 18),
-      ]),
-      children: districtAreas.map((a) => ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.only(left: 48, right: 16),
-        title: Text(a['village_or_ward']),
-        subtitle: Text('Block: ${a['block']}'),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.teal), onPressed: () => _showEditAreaDialog(a)),
-          IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent), onPressed: () => _deleteArea(a)),
-        ]),
-      )).toList(),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(4),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StateJurisdictionDetailScreen(
+                  state: state,
+                  districts: allDistricts,
+                  areas: allAreas,
+                ),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.flag_rounded, color: Color(0xFF00796B), size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        state['name'] ?? 'State',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Color(0xFF263238),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${stateDistricts.length} Districts',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.teal.shade800,
+                              ),
+                            ),
+                          ),
+                          if (stateAreasCount > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '$stateAreasCount Wards',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.indigo.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: Colors.black26,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
