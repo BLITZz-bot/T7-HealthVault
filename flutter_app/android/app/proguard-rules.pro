@@ -28,6 +28,21 @@
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
 
+# Suppress warnings from optional Flutter Play Core deferred components
+-dontwarn com.google.android.play.core.**
+-dontwarn com.google.android.play.core.splitcompat.**
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.tasks.**
+
+# Keep ONNX Runtime & Native Bindings
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
+
+# Keep SQLite & Database
+-keep class org.sqlite.** { *; }
+-dontwarn org.sqlite.**
+
 # Suppress warnings from third-party libraries if needed
 -dontwarn javax.annotation.**
 -dontwarn org.checkerframework.**
+-dontwarn sun.misc.**
