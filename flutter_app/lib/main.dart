@@ -1,3 +1,9 @@
+// ==============================================================================
+// T7 HealthVault - Intelligent Offline Clinical EHR & Decision Support System
+// Copyright (c) 2026 M M Bharath / T7 HealthVault. All Rights Reserved.
+// Proprietary & Confidential. Unauthorized copying or redistribution is prohibited.
+// ==============================================================================
+
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'screens/language_setup_screen.dart';

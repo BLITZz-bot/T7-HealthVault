@@ -108,24 +108,39 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: Text(LanguageService.tr('cancel'))),
             ElevatedButton(
               onPressed: () async {
-                if (headNameController.text.isNotEmpty && houseNoController.text.isNotEmpty && selectedAreaId != null) {
-                  final success = await LocalDbService.addFamily(
-                    widget.token,
-                    headNameController.text,
-                    houseNoController.text,
-                    contactController.text,
-                    selectedAreaId!,
+                final headName = headNameController.text.trim();
+                final houseNo = houseNoController.text.trim();
+                final phone = contactController.text.trim();
+
+                if (headName.isEmpty || houseNo.isEmpty || selectedAreaId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill in Family Head Name, House Number, and Village/Ward.'), backgroundColor: Colors.orange),
                   );
-                  if (!mounted || !context.mounted) return;
-                  Navigator.pop(context);
-                  if (success && context.mounted) {
-                    _refreshFamilies();
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(LanguageService.tr('save_family'))));
-                  }
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(LanguageService.tr('enter_name_phone'))));
+                  return;
+                }
+
+                if (phone.length < 10) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('A valid 10-digit Primary Contact Number is required for PHC Doctor follow-up & 108 Ambulance dispatch.'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
+
+                final success = await LocalDbService.addFamily(
+                  widget.token,
+                  headName,
+                  houseNo,
+                  phone,
+                  selectedAreaId!,
+                );
+                if (!mounted || !context.mounted) return;
+                Navigator.pop(context);
+                if (success && context.mounted) {
+                  _refreshFamilies();
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(LanguageService.tr('save_family'))));
                 }
               },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
               child: Text(LanguageService.tr('save_family')),
             ),
           ],
@@ -142,89 +157,362 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
         return ValueListenableBuilder<bool>(
           valueListenable: OnDeviceLLMService.isModelDownloadedNotifier,
           builder: (context, isDownloaded, _) {
-            return Container(
-              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [const Color(0xFF004D40), const Color(0xFF00796B)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.teal.shade200.withAlpha(100),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.psychology, color: Colors.white, size: 20),
-                          const SizedBox(width: 6),
-                          Text(
-                            LanguageService.tr('ai_intelligence_active'),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              letterSpacing: 0.8,
-                            ),
+            return ValueListenableBuilder<bool>(
+              valueListenable: OnDeviceLLMService.isPausedNotifier,
+              builder: (context, isPaused, _) {
+                return ValueListenableBuilder<bool>(
+                  valueListenable: OnDeviceLLMService.isDownloadingNotifier,
+                  builder: (context, isDownloading, _) {
+                    return Container(
+                      margin: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDownloaded
+                              ? [const Color(0xFF004D40), const Color(0xFF00695C)]
+                              : (isDownloading || isPaused
+                                  ? [const Color(0xFF1E293B), const Color(0xFF0F766E)]
+                                  : [const Color(0xFF1A237E), const Color(0xFF00796B)]),
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isDownloaded
+                                ? Colors.teal.shade900.withAlpha(50)
+                                : Colors.black.withAlpha(40),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(40),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '${langInfo['native']}',
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    isDownloaded
+                                        ? Icons.verified_rounded
+                                        : (isDownloading
+                                            ? Icons.downloading_rounded
+                                            : (isPaused ? Icons.pause_circle_filled : Icons.psychology)),
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isDownloaded
+                                        ? 'ON-DEVICE CLINICAL AI ACTIVE'
+                                        : (isDownloading
+                                            ? 'DOWNLOADING OFFLINE MODEL'
+                                            : (isPaused
+                                                ? 'DOWNLOAD PAUSED'
+                                                : LanguageService.tr('ai_intelligence_active'))),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withAlpha(40),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${langInfo['native']}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  if (isDownloaded) ...[
+                                    const SizedBox(width: 4),
+                                    PopupMenuButton<String>(
+                                      icon: const Icon(Icons.more_vert, color: Colors.white70, size: 18),
+                                      tooltip: 'Model Options',
+                                      onSelected: (val) async {
+                                        if (val == 'info') {
+                                          OnDeviceLLMService.showModelManagementDialog(context);
+                                        } else if (val == 'delete') {
+                                          await OnDeviceLLMService.deleteModel();
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Model deleted. Built-in engine remains active!')),
+                                            );
+                                          }
+                                        }
+                                      },
+                                      itemBuilder: (ctx) => [
+                                        const PopupMenuItem(
+                                          value: 'info',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.info_outline, size: 18, color: Color(0xFF00796B)),
+                                              SizedBox(width: 8),
+                                              Text('Model Info & Details', style: TextStyle(fontSize: 13)),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                              SizedBox(width: 8),
+                                              Text('Delete Model (~1.04 GB)', style: TextStyle(fontSize: 13, color: Colors.red)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            isDownloaded
+                                ? '⚡ T7 Clinical AI Model Loaded (~1.04 GB On-Device) • 100% Offline'
+                                : (isDownloading
+                                    ? '⏳ Downloading offline neural weights. Tap Pause anytime.'
+                                    : (isPaused
+                                        ? '⏸️ Download Paused • Progress saved. Tap Resume to continue.'
+                                        : '🤖 Built-in Clinical Intelligence Active • Optional 1.04 GB Offline Model')),
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+
+                          // Live Progress Bar if Downloading or Paused
+                          if (isDownloading || isPaused) ...[
+                            const SizedBox(height: 10),
+                            ValueListenableBuilder<double>(
+                              valueListenable: OnDeviceLLMService.downloadProgressNotifier,
+                              builder: (context, progress, _) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: LinearProgressIndicator(
+                                        value: progress > 0 ? progress : null,
+                                        minHeight: 6,
+                                        backgroundColor: Colors.white.withAlpha(40),
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          isPaused ? Colors.amber : const Color(0xFF4ADE80),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    ValueListenableBuilder<String>(
+                                      valueListenable: OnDeviceLLMService.downloadStatusNotifier,
+                                      builder: (context, status, _) {
+                                        return Text(
+                                          status,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+
+                          const SizedBox(height: 10),
+
+                          // Action Buttons
+                          if (isDownloaded) ...[
+                            // Once downloaded: ONLY the clean Open Chat button is shown
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: const Color(0xFF004D40),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: 2,
+                                ),
+                                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                                label: Text(
+                                  LanguageService.tr('qwen3_ai_chat', defaultText: 'Open T7 Clinical AI Chat'),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                onPressed: () {
+                                  QwenAIChatModal.show(context);
+                                },
+                              ),
+                            ),
+                          ] else if (isDownloading) ...[
+                            // While downloading: Pause & Cancel & Chat buttons
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange.shade500,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.pause_rounded, size: 16),
+                                    label: const Text('Pause', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                    onPressed: () {
+                                      OnDeviceLLMService.pauseDownload();
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(color: Colors.white54),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                                  label: const Text('Clear', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                                  onPressed: () async {
+                                    await OnDeviceLLMService.deleteModel();
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: const Color(0xFF004D40),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                                  label: const Text('Chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  onPressed: () {
+                                    QwenAIChatModal.show(context);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ] else if (isPaused) ...[
+                            // While paused: Resume & Clear & Chat buttons
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00897B),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                                    label: const Text('Resume', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                    onPressed: () async {
+                                      final success = await OnDeviceLLMService.downloadModel();
+                                      if (context.mounted && success) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('T7 Clinical AI Model downloaded successfully!'), backgroundColor: Colors.green),
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(color: Colors.white54),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.delete_outline, size: 16, color: Colors.white70),
+                                  label: const Text('Clear', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                                  onPressed: () async {
+                                    await OnDeviceLLMService.deleteModel();
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: const Color(0xFF004D40),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                                  label: const Text('Chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  onPressed: () {
+                                    QwenAIChatModal.show(context);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ] else ...[
+                            // Not downloaded: Chat + Download Button
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF004D40),
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      elevation: 2,
+                                    ),
+                                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                                    label: Text(
+                                      LanguageService.tr('qwen3_ai_chat', defaultText: 'Open AI Chat'),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                    onPressed: () {
+                                      QwenAIChatModal.show(context);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 2,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.amber.shade400,
+                                      foregroundColor: Colors.black87,
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.download_for_offline, size: 16),
+                                    label: const Text(
+                                      'Download',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                    onPressed: () {
+                                      _showHomeGgufDownloadDialog(context);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    isDownloaded
-                        ? LanguageService.tr('sepsis_news2_loaded')
-                        : LanguageService.tr('sepsis_news2_ready'),
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                  if (!isDownloaded) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber.shade400,
-                          foregroundColor: Colors.black87,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        icon: const Icon(Icons.download_for_offline, size: 18),
-                        label: Text(
-                          LanguageService.tr('download_qwen3_llm'),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                        onPressed: () {
-                          _showHomeGgufDownloadDialog(context);
-                        },
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                    );
+                  },
+                );
+              },
             );
           },
         );
@@ -233,69 +521,7 @@ class _ASHAHomeScreenState extends State<ASHAHomeScreen> {
   }
 
   void _showHomeGgufDownloadDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              const Icon(Icons.downloading_rounded, color: Color(0xFF00796B)),
-              const SizedBox(width: 8),
-              Text(LanguageService.tr('download_qwen3_llm'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                LanguageService.tr('sepsis_news2_loaded'),
-                style: const TextStyle(fontSize: 13, color: Colors.black87),
-              ),
-              const SizedBox(height: 16),
-              ValueListenableBuilder<double>(
-                valueListenable: OnDeviceLLMService.downloadProgressNotifier,
-                builder: (context, progress, _) {
-                  return Column(
-                    children: [
-                      LinearProgressIndicator(value: progress, minHeight: 8),
-                      const SizedBox(height: 8),
-                      ValueListenableBuilder<String>(
-                        valueListenable: OnDeviceLLMService.downloadStatusNotifier,
-                        builder: (context, status, _) {
-                          return Text(status, style: const TextStyle(fontSize: 11, color: Colors.grey));
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(LanguageService.tr('cancel')),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
-              icon: const Icon(Icons.download),
-              label: Text(LanguageService.tr('start_download', defaultText: 'Start Download (~986 MB)')),
-              onPressed: () async {
-                final success = await OnDeviceLLMService.downloadModel();
-                if (ctx.mounted && success) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(LanguageService.tr('qwen3_ai_chat'))),
-                  );
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
+    OnDeviceLLMService.showModelManagementDialog(context);
   }
 
   String _searchQuery = '';

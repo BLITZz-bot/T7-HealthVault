@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Hospital-Grade Clinical AI Model Training Pipeline
+T7 HealthVault - Hospital-Grade Clinical AI Model Training Pipeline
+Copyright (c) 2026 M M Bharath / T7 HealthVault. All Rights Reserved.
+Proprietary & Confidential. Unauthorized copying or redistribution is prohibited.
+
 PhysioNet 2019 Computing in Cardiology Challenge + Clinical Emergency Indices
 
 This script:

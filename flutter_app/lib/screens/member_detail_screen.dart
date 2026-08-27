@@ -46,9 +46,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late Future<List<dynamic>> _historyFuture;
-  late Future<Map<String, dynamic>> _analyticsFuture;
   late Map<String, dynamic> _currentMember;
   String _selectedTimeRange = 'all'; // Default time range for analytics
+  String _selectedVitalTab = 'bp'; // 'bp', 'hr', 'spo2', 'sugar', 'temp', 'rr'
 
   @override
   void initState() {
@@ -76,7 +76,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         }
         return records;
       });
-      _analyticsFuture = LocalDbService.getMemberAnalytics(widget.token, id);
     });
   }
 
@@ -101,108 +100,347 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     final nameCtrl = TextEditingController(text: _currentMember['full_name']?.toString() ?? '');
     final ageCtrl = TextEditingController(text: _currentMember['age']?.toString() ?? '');
     final relCtrl = TextEditingController(text: _currentMember['relationship_to_head']?.toString() ?? '');
+    final phoneCtrl = TextEditingController(text: _currentMember['mobile_number']?.toString() ?? '');
+    final abhaCtrl = TextEditingController(text: _currentMember['abha_id']?.toString() ?? '');
+    final birthWeightCtrl = TextEditingController(text: _currentMember['birth_weight']?.toString() ?? '');
+    final muacCtrl = TextEditingController(text: _currentMember['muac_cm']?.toString() ?? '');
+    final chronicNotesCtrl = TextEditingController(text: _currentMember['chronic_notes']?.toString() ?? '');
+
     String gender = _currentMember['gender']?.toString().toLowerCase() ?? 'male';
     if (gender != 'male' && gender != 'female' && gender != 'other') gender = 'male';
     String? pickedImageBase64 = _currentMember['profile_image']?.toString();
 
+    bool isPregnant = (_currentMember['is_pregnant'] == 1 || _currentMember['is_pregnant'] == true);
+    DateTime? lmpDate = _currentMember['lmp_date'] != null ? DateTime.tryParse(_currentMember['lmp_date'].toString()) : null;
+    String? eddDateStr = _currentMember['edd_date']?.toString();
+    String? gestationalAgeStr;
+    if (lmpDate != null) {
+      final days = DateTime.now().difference(lmpDate).inDays;
+      final weeks = (days / 7).floor();
+      final tri = weeks >= 28 ? '3rd Trimester' : (weeks >= 13 ? '2nd Trimester' : '1st Trimester');
+      gestationalAgeStr = 'Week $weeks ($tri)';
+    }
+
+    bool isHighRisk = (_currentMember['is_high_risk_pregnancy'] == 1 || _currentMember['is_high_risk_pregnancy'] == true);
+    bool isLactating = (_currentMember['is_lactating'] == 1 || _currentMember['is_lactating'] == true);
+    bool td1 = (_currentMember['td1_vaccine'] == 1 || _currentMember['td1_vaccine'] == true);
+    bool td2 = (_currentMember['td2_vaccine'] == 1 || _currentMember['td2_vaccine'] == true);
+    bool tdBooster = (_currentMember['td_booster'] == 1 || _currentMember['td_booster'] == true);
+    int ifaCount = (_currentMember['ifa_tablets_given'] as int?) ?? 0;
+    int calciumCount = (_currentMember['calcium_tablets_given'] as int?) ?? 0;
+    String deliveryType = _currentMember['delivery_type']?.toString() ?? 'Institutional (Hospital/PHC)';
+    bool hasChronic = (_currentMember['has_chronic_condition'] == 1 || _currentMember['has_chronic_condition'] == true);
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.edit, color: Color(0xFF00796B)),
-              SizedBox(width: 8),
-              Text('Edit Member Details'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+        builder: (ctx, setModalState) {
+          final int parsedAge = int.tryParse(ageCtrl.text) ?? 0;
+          final bool isFemaleReproductive = gender == 'female' && (parsedAge == 0 || (parsedAge >= 12 && parsedAge <= 55));
+          final bool isChild = parsedAge > 0 && parsedAge < 5;
+
+          void updateLMP(DateTime selected) {
+            lmpDate = selected;
+            final edd = selected.add(const Duration(days: 280));
+            eddDateStr = DateFormat('dd MMM yyyy').format(edd);
+            final days = DateTime.now().difference(selected).inDays;
+            final weeks = (days / 7).floor();
+            final tri = weeks >= 28 ? '3rd Trimester' : (weeks >= 13 ? '2nd Trimester' : '1st Trimester');
+            gestationalAgeStr = 'Week $weeks ($tri)';
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
               children: [
-                GestureDetector(
-                  onTap: () async {
-                    final compressedBase64 = await ImageUtils.pickAndCompressImage(context);
-                    if (compressedBase64 != null) {
-                      setModalState(() {
-                        pickedImageBase64 = compressedBase64;
-                      });
-                    }
-                  },
-                  child: CircleAvatar(
-                    radius: 36,
-                    backgroundColor: Colors.teal.shade50,
-                    backgroundImage: ImageUtils.safeBase64Image(pickedImageBase64),
-                    child: pickedImageBase64 == null
-                        ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28)
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  pickedImageBase64 == null ? 'Add Member Photo (Max 5MB)' : 'Photo Selected (Compressed)',
-                  style: TextStyle(fontSize: 12, color: Colors.teal.shade800, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 12),
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
-                const SizedBox(height: 12),
-                TextField(controller: ageCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Age')),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: gender,
-                  decoration: const InputDecoration(labelText: 'Gender'),
-                  items: const [
-                    DropdownMenuItem(value: 'male', child: Text('Male')),
-                    DropdownMenuItem(value: 'female', child: Text('Female')),
-                    DropdownMenuItem(value: 'other', child: Text('Other')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setModalState(() => gender = val);
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(controller: relCtrl, decoration: const InputDecoration(labelText: 'Relationship to Head')),
+                Icon(Icons.edit, color: Color(0xFF00796B)),
+                SizedBox(width: 8),
+                Text('Edit Clinical EHR Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ],
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameCtrl.text.isNotEmpty && ageCtrl.text.isNotEmpty && relCtrl.text.isNotEmpty) {
-                  final age = int.tryParse(ageCtrl.text) ?? 0;
-                  final ok = await LocalDbService.updateMember(
-                    token: widget.token,
-                    memberId: _currentMember['id'].toString(),
-                    fullName: nameCtrl.text,
-                    age: age,
-                    gender: gender,
-                    relationship: relCtrl.text,
-                    profileImage: pickedImageBase64,
-                  );
-                  if (!mounted || !context.mounted) return;
-                  Navigator.pop(ctx);
-                  if (ok) {
-                    setState(() {
-                      _currentMember['full_name'] = nameCtrl.text;
-                      _currentMember['age'] = age;
-                      _currentMember['gender'] = gender;
-                      _currentMember['relationship_to_head'] = relCtrl.text;
-                      if (pickedImageBase64 != null) {
-                        _currentMember['profile_image'] = pickedImageBase64;
-                      }
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Member details updated!'), backgroundColor: Colors.green),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final compressedBase64 = await ImageUtils.pickAndCompressImage(context);
+                          if (compressedBase64 != null) {
+                            setModalState(() => pickedImageBase64 = compressedBase64);
+                          }
+                        },
+                        child: CircleAvatar(
+                          radius: 36,
+                          backgroundColor: Colors.teal.shade50,
+                          backgroundImage: ImageUtils.safeBase64Image(pickedImageBase64),
+                          child: pickedImageBase64 == null ? const Icon(Icons.add_a_photo, color: Colors.teal, size: 28) : null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name *')),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: ageCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Age *'),
+                            onChanged: (_) => setModalState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: gender,
+                            decoration: const InputDecoration(labelText: 'Gender'),
+                            items: const [
+                              DropdownMenuItem(value: 'female', child: Text('Female')),
+                              DropdownMenuItem(value: 'male', child: Text('Male')),
+                              DropdownMenuItem(value: 'other', child: Text('Other')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) setModalState(() => gender = val);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(controller: relCtrl, decoration: const InputDecoration(labelText: 'Relationship to Head *')),
+                    const SizedBox(height: 10),
+                    TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile Number', prefixIcon: Icon(Icons.phone, size: 18))),
+                    const SizedBox(height: 10),
+                    TextField(controller: abhaCtrl, decoration: const InputDecoration(labelText: 'ABHA Health ID', prefixIcon: Icon(Icons.badge_outlined, size: 18))),
+                    const SizedBox(height: 12),
+
+                    // ── Maternal Section ──
+                    if (isFemaleReproductive) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.pink.shade50.withAlpha(120), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.pink.shade200)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.pregnant_woman, color: Colors.pink, size: 20),
+                                SizedBox(width: 6),
+                                Text('Maternal Health & Pregnancy (ANC)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.pink)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              title: const Text('Is Currently Pregnant (ANC)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              value: isPregnant,
+                              activeThumbColor: Colors.pink,
+                              onChanged: (val) => setModalState(() => isPregnant = val),
+                            ),
+                            if (isPregnant) ...[
+                              const SizedBox(height: 6),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(foregroundColor: Colors.pink.shade900, side: BorderSide(color: Colors.pink.shade300)),
+                                icon: const Icon(Icons.calendar_month, size: 18),
+                                label: Text(lmpDate == null ? 'Select LMP Date (Last Period)' : 'LMP: ${DateFormat('dd MMM yyyy').format(lmpDate!)}'),
+                                onPressed: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: lmpDate ?? DateTime.now().subtract(const Duration(days: 60)),
+                                    firstDate: DateTime.now().subtract(const Duration(days: 300)),
+                                    lastDate: DateTime.now(),
+                                  );
+                                  if (picked != null) setModalState(() => updateLMP(picked));
+                                },
+                              ),
+                              if (eddDateStr != null) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('👶 Expected Delivery (EDD): $eddDateStr', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purple)),
+                                      if (gestationalAgeStr != null) Text('⏳ Gestational Stage: $gestationalAgeStr', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.teal)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: const Text('High-Risk Pregnancy (HRP) Alert', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red)),
+                                value: isHighRisk,
+                                activeColor: Colors.red,
+                                onChanged: (val) => setModalState(() => isHighRisk = val ?? false),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text('Td Vaccines:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              Row(
+                                children: [
+                                  Expanded(child: CheckboxListTile(contentPadding: EdgeInsets.zero, dense: true, title: const Text('Td-1', style: TextStyle(fontSize: 11)), value: td1, onChanged: (v) => setModalState(() => td1 = v ?? false))),
+                                  Expanded(child: CheckboxListTile(contentPadding: EdgeInsets.zero, dense: true, title: const Text('Td-2', style: TextStyle(fontSize: 11)), value: td2, onChanged: (v) => setModalState(() => td2 = v ?? false))),
+                                  Expanded(child: CheckboxListTile(contentPadding: EdgeInsets.zero, dense: true, title: const Text('Td Booster', style: TextStyle(fontSize: 11)), value: tdBooster, onChanged: (v) => setModalState(() => tdBooster = v ?? false))),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(child: TextFormField(initialValue: '$ifaCount', keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'IFA Tablets (180 Target)', labelStyle: TextStyle(fontSize: 11)), onChanged: (v) => ifaCount = int.tryParse(v) ?? 0)),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: TextFormField(initialValue: '$calciumCount', keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Calcium Tablets', labelStyle: TextStyle(fontSize: 11)), onChanged: (v) => calciumCount = int.tryParse(v) ?? 0)),
+                                ],
+                              ),
+                            ],
+                            const Divider(height: 16),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              title: const Text('Lactating Mother (Infant < 6 Months)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                              value: isLactating,
+                              activeThumbColor: Colors.pink,
+                              onChanged: (val) => setModalState(() => isLactating = val),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // ── Child Section ──
+                    if (isChild) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.blue.shade50.withAlpha(120), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.blue.shade200)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.child_care, color: Colors.blue, size: 20),
+                                SizedBox(width: 6),
+                                Text('Pediatric Growth & Birth (< 5 Yrs)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(child: TextField(controller: birthWeightCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Birth Weight (kg)'))),
+                                const SizedBox(width: 10),
+                                Expanded(child: TextField(controller: muacCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'MUAC Tape (cm)'))),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            DropdownButtonFormField<String>(
+                              initialValue: deliveryType,
+                              decoration: const InputDecoration(labelText: 'Delivery Place'),
+                              items: const [
+                                DropdownMenuItem(value: 'Institutional (Hospital/PHC)', child: Text('Institutional (Hospital/PHC)')),
+                                DropdownMenuItem(value: 'Home Delivery', child: Text('Home Delivery')),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) setModalState(() => deliveryType = val);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // ── Chronic Condition ──
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text('Has Known Chronic Health Condition', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      value: hasChronic,
+                      onChanged: (val) => setModalState(() => hasChronic = val ?? false),
+                    ),
+                    if (hasChronic)
+                      TextField(controller: chronicNotesCtrl, decoration: const InputDecoration(labelText: 'Specific Chronic Conditions / Medications')),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameCtrl.text.isNotEmpty && ageCtrl.text.isNotEmpty && relCtrl.text.isNotEmpty) {
+                    final age = int.tryParse(ageCtrl.text) ?? 0;
+                    final ok = await LocalDbService.updateMember(
+                      token: widget.token,
+                      memberId: _currentMember['id'].toString(),
+                      fullName: nameCtrl.text,
+                      age: age,
+                      gender: gender,
+                      relationship: relCtrl.text,
+                      profileImage: pickedImageBase64,
+                      abhaId: abhaCtrl.text.isNotEmpty ? abhaCtrl.text : null,
+                      mobileNumber: phoneCtrl.text.isNotEmpty ? phoneCtrl.text : null,
+                      isPregnant: isPregnant,
+                      lmpDate: lmpDate?.toIso8601String(),
+                      eddDate: eddDateStr,
+                      isHighRiskPregnancy: isHighRisk,
+                      isLactating: isLactating,
+                      td1Vaccine: td1,
+                      td2Vaccine: td2,
+                      tdBooster: tdBooster,
+                      ifaTabletsGiven: ifaCount,
+                      calciumTabletsGiven: calciumCount,
+                      birthWeight: double.tryParse(birthWeightCtrl.text),
+                      deliveryType: deliveryType,
+                      muacCm: double.tryParse(muacCtrl.text),
+                      hasChronicCondition: hasChronic,
+                      chronicNotes: chronicNotesCtrl.text.isNotEmpty ? chronicNotesCtrl.text : null,
                     );
+                    if (!mounted || !context.mounted) return;
+                    Navigator.pop(ctx);
+                    if (ok) {
+                      setState(() {
+                        _currentMember['full_name'] = nameCtrl.text;
+                        _currentMember['age'] = age;
+                        _currentMember['gender'] = gender;
+                        _currentMember['relationship_to_head'] = relCtrl.text;
+                        if (pickedImageBase64 != null) _currentMember['profile_image'] = pickedImageBase64;
+                        _currentMember['abha_id'] = abhaCtrl.text;
+                        _currentMember['mobile_number'] = phoneCtrl.text;
+                        _currentMember['is_pregnant'] = isPregnant ? 1 : 0;
+                        _currentMember['lmp_date'] = lmpDate?.toIso8601String();
+                        _currentMember['edd_date'] = eddDateStr;
+                        _currentMember['is_high_risk_pregnancy'] = isHighRisk ? 1 : 0;
+                        _currentMember['is_lactating'] = isLactating ? 1 : 0;
+                        _currentMember['td1_vaccine'] = td1 ? 1 : 0;
+                        _currentMember['td2_vaccine'] = td2 ? 1 : 0;
+                        _currentMember['td_booster'] = tdBooster ? 1 : 0;
+                        _currentMember['ifa_tablets_given'] = ifaCount;
+                        _currentMember['calcium_tablets_given'] = calciumCount;
+                        _currentMember['birth_weight'] = double.tryParse(birthWeightCtrl.text);
+                        _currentMember['delivery_type'] = deliveryType;
+                        _currentMember['muac_cm'] = double.tryParse(muacCtrl.text);
+                        _currentMember['has_chronic_condition'] = hasChronic ? 1 : 0;
+                        _currentMember['chronic_notes'] = chronicNotesCtrl.text;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Member clinical profile updated!'), backgroundColor: Colors.green),
+                      );
+                    }
                   }
-                }
-              },
-              child: const Text('Save Changes'),
-            )
-          ],
-        ),
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
+                child: const Text('Save Changes'),
+              )
+            ],
+          );
+        },
       ),
     );
   }
@@ -697,11 +935,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // Tab 2: Analytics / Charts
+  // Tab 2: Interactive Vital Variation & Clinical Trajectory Analytics
   // ─────────────────────────────────────────────────────────────────────
   Widget _buildAnalyticsTab() {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _analyticsFuture,
+    return FutureBuilder<List<dynamic>>(
+      future: _historyFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -709,231 +947,1232 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
-        final data = snapshot.data ?? {};
-
-        final cutoff = _getCutoffDate();
-        List<dynamic> filterData(List<dynamic>? list) {
-          if (list == null) return [];
-          if (cutoff == null) return list;
-          return list.where((item) {
-            try {
-              return DateTime.parse(item['date'] as String).toLocal().isAfter(cutoff);
-            } catch (_) {
-              return true;
-            }
-          }).toList();
+        final rawRecords = snapshot.data ?? [];
+        if (rawRecords.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.show_chart, size: 64, color: Colors.teal.shade300),
+                  const SizedBox(height: 16),
+                  const Text('No Vital History Available', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text('Record vitals over multiple visits to view physiological trajectory, target reference bands, and velocity indicators.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: _showAddRecordDialog,
+                    icon: const Icon(Icons.add_chart),
+                    label: const Text('Add First Vital Record'),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
-        final systolicDataList = filterData(data['blood_pressure_systolic'] as List?);
-        final diastolicDataList = filterData(data['blood_pressure_diastolic'] as List?);
-        final bsfDataList = filterData(data['blood_sugar_fasting'] as List?);
+        // Filter records by time range
+        final cutoff = _getCutoffDate();
+        final List<Map<String, dynamic>> records = rawRecords
+            .map((e) => Map<String, dynamic>.from(e))
+            .where((r) {
+              if (cutoff == null) return true;
+              try {
+                final dt = DateTime.parse(r['recorded_at'].toString()).toLocal();
+                return dt.isAfter(cutoff);
+              } catch (_) {
+                return true;
+              }
+            })
+            .toList();
 
-        final systolicData = _toSpots(systolicDataList);
-        final diastolicData = _toSpots(diastolicDataList);
-        final bsfData = _toSpots(bsfDataList);
+        // Sort ascending chronologically for chart rendering (oldest -> newest)
+        final chronologicalRecords = List<Map<String, dynamic>>.from(records)
+          ..sort((a, b) {
+            final da = DateTime.tryParse(a['recorded_at']?.toString() ?? '') ?? DateTime.now();
+            final db = DateTime.tryParse(b['recorded_at']?.toString() ?? '') ?? DateTime.now();
+            return da.compareTo(db);
+          });
 
-        final bpDates = systolicDataList.map((e) => e['date'] as String).toList();
-        final bsfDates = bsfDataList.map((e) => e['date'] as String).toList();
-
-        return Column(
+        return ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  const Text('Time Range: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: _selectedTimeRange,
-                    isDense: true,
-                    underline: Container(height: 1, color: Colors.teal),
-                    items: const [
-                      DropdownMenuItem(value: '7d', child: Text('Last 7 Days')),
-                      DropdownMenuItem(value: '14d', child: Text('Last 14 Days')),
-                      DropdownMenuItem(value: '1m', child: Text('Last 1 Month')),
-                      DropdownMenuItem(value: '2m', child: Text('Last 2 Months')),
-                      DropdownMenuItem(value: '3m', child: Text('Last 3 Months')),
-                      DropdownMenuItem(value: '6m', child: Text('Last 6 Months')),
-                      DropdownMenuItem(value: '9m', child: Text('Last 9 Months')),
-                      DropdownMenuItem(value: '1y', child: Text('Last 1 Year')),
-                      DropdownMenuItem(value: 'all', child: Text('All Time')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedTimeRange = val);
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16).copyWith(top: 0),
-                children: [
-                  _chartCard(
-                    title: 'Blood Pressure',
-                    subtitle: '— Systolic   ┄ Diastolic',
-                    dates: bpDates,
-                    lines: [
-                      LineChartBarData(
-                        spots: systolicData,
-                        isCurved: true,
-                        color: Colors.red,
-                        barWidth: 2,
-                        dotData: FlDotData(show: systolicData.length <= 10),
-                      ),
-                      LineChartBarData(
-                        spots: diastolicData,
-                        isCurved: true,
-                        color: Colors.orange,
-                        barWidth: 2,
-                        dotData: FlDotData(show: diastolicData.length <= 10),
-                        dashArray: [5, 4],
-                      ),
-                    ],
-                    yLabel: 'mmHg',
-                    emptyMessage: 'No BP data yet',
-                    hasData: systolicData.isNotEmpty || diastolicData.isNotEmpty,
-                  ),
-                  const SizedBox(height: 16),
-                  _chartCard(
-                    title: 'Blood Sugar (Fasting)',
-                    subtitle: '— Fasting glucose',
-                    dates: bsfDates,
-                    lines: [
-                      LineChartBarData(
-                        spots: bsfData,
-                        isCurved: true,
-                        color: Colors.purple,
-                        barWidth: 2,
-                        dotData: FlDotData(show: bsfData.length <= 10),
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.purple.withValues(alpha: 0.08),
+            // Top Control Bar: Time Range + Export PHC Slip
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today, size: 14, color: Color(0xFF00796B)),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          value: _selectedTimeRange,
+                          isDense: true,
+                          underline: const SizedBox.shrink(),
+                          style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.bold),
+                          items: const [
+                            DropdownMenuItem(value: '7d', child: Text('Last 7 Days')),
+                            DropdownMenuItem(value: '14d', child: Text('Last 14 Days')),
+                            DropdownMenuItem(value: '1m', child: Text('Last 1 Month')),
+                            DropdownMenuItem(value: '3m', child: Text('Last 3 Months')),
+                            DropdownMenuItem(value: '6m', child: Text('Last 6 Months')),
+                            DropdownMenuItem(value: '1y', child: Text('Last 1 Year')),
+                            DropdownMenuItem(value: 'all', child: Text('All Visits')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedTimeRange = val);
+                          },
                         ),
-                      ),
-                    ],
-                    yLabel: 'mg/dL',
-                    emptyMessage: 'No blood sugar data yet',
-                    hasData: bsfData.isNotEmpty,
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => _showPHCReferralSlipDialog(rawRecords),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF004D40),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.print_outlined, size: 16),
+                  label: const Text('Export PHC Slip', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
+            const SizedBox(height: 14),
+
+            // Interactive Vital Selector Pill Tabs
+            _buildVitalSelectorTabs(),
+            const SizedBox(height: 14),
+
+            // Main Interactive Reference Band Chart Card
+            _buildInteractiveReferenceBandChart(chronologicalRecords),
+            const SizedBox(height: 16),
+
+            // Maternal Health & ANC/PNC Care (For pregnant / lactating women)
+            _buildMaternalANCCard(),
+
+            // Pediatric Child Growth & Immunization (For infants / children < 5 yrs)
+            _buildPediatricChildCard(),
+
+            // Longitudinal Table breakdown for selected vital
+            _buildSelectedVitalHistoryTable(chronologicalRecords),
+            const SizedBox(height: 30),
           ],
         );
       },
     );
   }
 
-  List<FlSpot> _toSpots(List? dataPoints) {
-    if (dataPoints == null || dataPoints.isEmpty) return [];
-    return dataPoints.asMap().entries.map((entry) {
-      final value = (entry.value['value'] as num).toDouble();
-      return FlSpot(entry.key.toDouble(), value);
-    }).toList();
+  // ── 1. Interactive Selector Tabs ──
+  Widget _buildVitalSelectorTabs() {
+    final tabs = [
+      {'id': 'bp', 'label': 'Blood Pressure', 'icon': Icons.favorite},
+      {'id': 'hr', 'label': 'Pulse / HR', 'icon': Icons.monitor_heart},
+      {'id': 'spo2', 'label': 'SpO2 Oxygen', 'icon': Icons.air},
+      {'id': 'sugar', 'label': 'Blood Sugar', 'icon': Icons.water_drop},
+      {'id': 'temp', 'label': 'Temperature', 'icon': Icons.thermostat},
+      {'id': 'rr', 'label': 'Resp Rate', 'icon': Icons.waves},
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: tabs.map((t) {
+          final isSelected = _selectedVitalTab == t['id'];
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              avatar: Icon(t['icon'] as IconData, size: 16, color: isSelected ? Colors.white : const Color(0xFF00796B)),
+              label: Text(t['label'] as String),
+              selected: isSelected,
+              selectedColor: const Color(0xFF00796B),
+              backgroundColor: Colors.teal.shade50,
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF004D40),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                fontSize: 12,
+              ),
+              onSelected: (selected) {
+                if (selected) setState(() => _selectedVitalTab = t['id'] as String);
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
-  Widget _chartCard({
-    required String title,
-    required String subtitle,
-    required List<String> dates,
-    required List<LineChartBarData> lines,
-    required String yLabel,
-    required String emptyMessage,
-    required bool hasData,
-  }) {
+  // ── 2. Interactive Reference Band Chart Card ──
+  Widget _buildInteractiveReferenceBandChart(List<Map<String, dynamic>> records) {
+    // Extract data points based on selected vital
+    List<Map<String, dynamic>> points = [];
+    String unit = '';
+    String vitalTitle = '';
+    double minY = 0;
+    double maxY = 200;
+    double greenMin = 0;
+    double greenMax = 0;
+    double yellowMax = 0;
+
+    switch (_selectedVitalTab) {
+      case 'bp':
+        vitalTitle = 'Blood Pressure (Systolic)';
+        unit = 'mmHg';
+        minY = 60;
+        maxY = 190;
+        greenMin = 90;
+        greenMax = 120;
+        yellowMax = 140;
+        for (var r in records) {
+          if (r['blood_pressure_systolic'] != null) {
+            points.add({
+              'val': (r['blood_pressure_systolic'] as num).toDouble(),
+              'val2': (r['blood_pressure_diastolic'] as num?)?.toDouble(),
+              'date': r['recorded_at']?.toString() ?? '',
+              'notes': r['notes']?.toString() ?? '',
+            });
+          }
+        }
+        break;
+      case 'hr':
+        vitalTitle = 'Pulse / Heart Rate';
+        unit = 'bpm';
+        minY = 40;
+        maxY = 150;
+        greenMin = 60;
+        greenMax = 100;
+        yellowMax = 115;
+        for (var r in records) {
+          if (r['pulse_rate'] != null) {
+            points.add({
+              'val': (r['pulse_rate'] as num).toDouble(),
+              'date': r['recorded_at']?.toString() ?? '',
+              'notes': r['notes']?.toString() ?? '',
+            });
+          }
+        }
+        break;
+      case 'spo2':
+        vitalTitle = 'SpO2 Oxygen Saturation';
+        unit = '%';
+        minY = 80;
+        maxY = 100;
+        greenMin = 96;
+        greenMax = 100;
+        yellowMax = 95;
+        for (var r in records) {
+          if (r['spo2'] != null) {
+            points.add({
+              'val': (r['spo2'] as num).toDouble(),
+              'date': r['recorded_at']?.toString() ?? '',
+              'notes': r['notes']?.toString() ?? '',
+            });
+          }
+        }
+        break;
+      case 'sugar':
+        vitalTitle = 'Blood Glucose (Fasting)';
+        unit = 'mg/dL';
+        minY = 50;
+        maxY = 280;
+        greenMin = 70;
+        greenMax = 140;
+        yellowMax = 200;
+        for (var r in records) {
+          final s = r['blood_sugar_fasting'] ?? r['blood_sugar_postprandial'];
+          if (s != null) {
+            points.add({
+              'val': (s as num).toDouble(),
+              'date': r['recorded_at']?.toString() ?? '',
+              'notes': r['notes']?.toString() ?? '',
+            });
+          }
+        }
+        break;
+      case 'temp':
+        vitalTitle = 'Core Body Temperature';
+        unit = '°F';
+        minY = 94;
+        maxY = 105;
+        greenMin = 97.5;
+        greenMax = 99.5;
+        yellowMax = 100.4;
+        for (var r in records) {
+          if (r['temperature'] != null) {
+            points.add({
+              'val': (r['temperature'] as num).toDouble(),
+              'date': r['recorded_at']?.toString() ?? '',
+              'notes': r['notes']?.toString() ?? '',
+            });
+          }
+        }
+        break;
+      case 'rr':
+      default:
+        vitalTitle = 'Respiratory Rate';
+        unit = 'rpm';
+        minY = 6;
+        maxY = 32;
+        greenMin = 12;
+        greenMax = 20;
+        yellowMax = 24;
+        for (var r in records) {
+          if (r['respiratory_rate'] != null) {
+            points.add({
+              'val': (r['respiratory_rate'] as num).toDouble(),
+              'date': r['recorded_at']?.toString() ?? '',
+              'notes': r['notes']?.toString() ?? '',
+            });
+          }
+        }
+        break;
+    }
+
+    if (points.isEmpty) {
+      return Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Text('No recorded data for $vitalTitle in this timeframe.', style: const TextStyle(color: Colors.grey)),
+          ),
+        ),
+      );
+    }
+
+    // Calculate trend velocity delta between last two points
+    String trendBadge = 'Initial Baseline';
+    Color trendColor = const Color(0xFF00796B);
+    if (points.length >= 2) {
+      final latest = points.last['val'] as double;
+      final prev = points[points.length - 2]['val'] as double;
+      final diff = latest - prev;
+      final sign = diff > 0 ? '+' : '';
+      if (_selectedVitalTab == 'bp' || _selectedVitalTab == 'hr' || _selectedVitalTab == 'temp' || _selectedVitalTab == 'sugar') {
+        if (diff < 0) {
+          trendBadge = '📉 Improving ($sign${diff.toStringAsFixed(1)} $unit)';
+          trendColor = Colors.green.shade700;
+        } else if (diff > 10) {
+          trendBadge = '⚠️ Spike ($sign${diff.toStringAsFixed(1)} $unit)';
+          trendColor = Colors.red.shade700;
+        } else {
+          trendBadge = '➡️ Steady ($sign${diff.toStringAsFixed(1)} $unit)';
+          trendColor = Colors.teal;
+        }
+      } else {
+        if (diff > 0) {
+          trendBadge = '📈 Improving ($sign${diff.toStringAsFixed(1)} $unit)';
+          trendColor = Colors.green.shade700;
+        } else if (diff < -3) {
+          trendBadge = '⚠️ Decline ($sign${diff.toStringAsFixed(1)} $unit)';
+          trendColor = Colors.red.shade700;
+        } else {
+          trendBadge = '➡️ Stable ($sign${diff.toStringAsFixed(1)} $unit)';
+          trendColor = Colors.teal;
+        }
+      }
+    }
+
+    // Build spots with individual point colors
+    final spots = points.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value['val'] as double)).toList();
+
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 16),
-            if (!hasData)
-              SizedBox(
-                height: 120,
-                child: Center(child: Text(emptyMessage, style: const TextStyle(color: Colors.grey))),
-              )
-            else
-              SizedBox(
-                height: 180,
-                child: LineChart(
-                  LineChartData(
-                    lineBarsData: lines,
-                    gridData: FlGridData(
-                      show: true,
-                      getDrawingHorizontalLine: (_) =>
-                        const FlLine(color: Color(0xFFEEEEEE), strokeWidth: 1),
-                      getDrawingVerticalLine: (_) =>
-                        const FlLine(color: Color(0xFFEEEEEE), strokeWidth: 1),
-                    ),
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        axisNameWidget: Text(yLabel, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 40,
-                          getTitlesWidget: (value, meta) => Text(
-                            value.toInt().toString(),
-                            style: const TextStyle(fontSize: 10, color: Colors.grey),
-                          ),
-                        ),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          interval: 1,
-                          reservedSize: 22,
-                          getTitlesWidget: (value, meta) {
-                            if (value % 1 != 0) return const SizedBox.shrink();
-                            int index = value.toInt();
-                            if (index < 0 || index >= dates.length) return const SizedBox.shrink();
-                            
-                            String dtStr = dates[index];
-                            String formatted = '';
-                            try {
-                              final dt = DateTime.parse(dtStr).toLocal();
-                              formatted = DateFormat('dd MMM').format(dt);
-                            } catch (_) {
-                              formatted = dtStr.substring(0, 5); // Fallback
-                            }
-                            
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 4.0),
-                              child: Text(
-                                formatted,
-                                style: const TextStyle(fontSize: 9, color: Colors.grey),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    ),
-                    borderData: FlBorderData(show: false),
-                    lineTouchData: LineTouchData(
-                      touchTooltipData: LineTouchTooltipData(
-                        getTooltipItems: (spots) => spots.map((spot) => LineTooltipItem(
-                          spot.y.toStringAsFixed(1),
-                          const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        )).toList(),
-                      ),
-                    ),
+            // Header: Vital Title + Trend Badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(vitalTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+                    Text('Latest: ${points.last['val']} $unit • ${points.length} Encounters', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: trendColor.withAlpha(25),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: trendColor.withAlpha(80)),
+                  ),
+                  child: Text(
+                    trendBadge,
+                    style: TextStyle(color: trendColor, fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Reference Bands Legend
+            Row(
+              children: [
+                _legendPill('🟢 Safe Target: $greenMin-$greenMax $unit', Colors.green.shade700),
+                const SizedBox(width: 8),
+                _legendPill('🟡 Borderline', Colors.orange.shade800),
+                const SizedBox(width: 8),
+                _legendPill('🔴 Critical', Colors.red.shade700),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // The Line Chart
+            SizedBox(
+              height: 220,
+              child: LineChart(
+                LineChartData(
+                  minY: minY,
+                  maxY: maxY,
+                  minX: 0,
+                  maxX: (points.length - 1).toDouble() > 0 ? (points.length - 1).toDouble() : 1.0,
+                  gridData: FlGridData(
+                    show: true,
+                    drawHorizontalLine: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (val) {
+                      if (val == greenMax || val == greenMin) {
+                        return FlLine(color: Colors.green.withAlpha(120), strokeWidth: 1.2, dashArray: [4, 4]);
+                      }
+                      if (val == yellowMax) {
+                        return FlLine(color: Colors.orange.withAlpha(120), strokeWidth: 1.2, dashArray: [4, 4]);
+                      }
+                      return FlLine(color: Colors.grey.shade200, strokeWidth: 1);
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 36,
+                        getTitlesWidget: (v, meta) => Text(v.toInt().toString(), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: 1,
+                        getTitlesWidget: (val, meta) {
+                          final idx = val.toInt();
+                          if (idx < 0 || idx >= points.length) return const SizedBox.shrink();
+                          final dtStr = points[idx]['date'] as String;
+                          String formatted = 'V${idx + 1}';
+                          try {
+                            final dt = DateTime.parse(dtStr).toLocal();
+                            formatted = DateFormat('dd MMM').format(dt);
+                          } catch (_) {}
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6.0),
+                            child: Text(formatted, style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.bold)),
+                          );
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          final idx = spot.x.toInt();
+                          final p = (idx >= 0 && idx < points.length) ? points[idx] : null;
+                          final dateStr = p != null ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.tryParse(p['date'] ?? '')?.toLocal() ?? DateTime.now()) : '';
+                          final note = (p != null && (p['notes'] as String).isNotEmpty) ? '\n📝 ${p['notes']}' : '';
+                          return LineTooltipItem(
+                            '${spot.y.toStringAsFixed(1)} $unit\n📅 $dateStr$note',
+                            const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      curveSmoothness: 0.35,
+                      color: const Color(0xFF00796B),
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.teal.shade700,
+                          Colors.cyan.shade600,
+                        ],
+                      ),
+                      barWidth: 3.5,
+                      isStrokeCapRound: true,
+                      belowBarData: BarAreaData(
+                        show: true,
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            const Color(0xFF00796B).withAlpha(60),
+                            const Color(0xFF00796B).withAlpha(5),
+                          ],
+                        ),
+                      ),
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          final y = spot.y;
+                          Color dotColor = Colors.green;
+                          if (y > yellowMax || y < greenMin) {
+                            dotColor = Colors.red;
+                          } else if (y > greenMax) {
+                            dotColor = Colors.orange;
+                          }
+                          return FlDotCirclePainter(
+                            radius: 5.5,
+                            color: dotColor,
+                            strokeWidth: 2,
+                            strokeColor: Colors.white,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _legendPill(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(60)),
+      ),
+      child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  // ── 3. Selected Vital History Table Breakdown ──
+  Widget _buildSelectedVitalHistoryTable(List<Map<String, dynamic>> records) {
+    final reversed = records.reversed.toList();
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.table_chart_outlined, size: 18, color: Color(0xFF00796B)),
+                SizedBox(width: 8),
+                Text('Longitudinal Log Table', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+              ],
+            ),
+            const Divider(height: 18),
+            ...reversed.map((r) {
+              final dateStr = _formatDate(r['recorded_at']);
+              dynamic val = '--';
+              String unit = '';
+              Color valColor = Colors.black87;
+
+              if (_selectedVitalTab == 'bp') {
+                val = '${r['blood_pressure_systolic'] ?? '?'}/${r['blood_pressure_diastolic'] ?? '?'}';
+                unit = 'mmHg';
+                final sbp = r['blood_pressure_systolic'] as int?;
+                if (sbp != null && (sbp >= 140 || sbp < 90)) valColor = Colors.red;
+              } else if (_selectedVitalTab == 'hr') {
+                val = r['pulse_rate'] ?? '--';
+                unit = 'bpm';
+              } else if (_selectedVitalTab == 'spo2') {
+                val = r['spo2'] ?? '--';
+                unit = '%';
+                final spo2 = r['spo2'] as int?;
+                if (spo2 != null && spo2 < 92) valColor = Colors.red;
+              } else if (_selectedVitalTab == 'sugar') {
+                val = r['blood_sugar_fasting'] ?? r['blood_sugar_postprandial'] ?? '--';
+                unit = 'mg/dL';
+              } else if (_selectedVitalTab == 'temp') {
+                val = r['temperature'] ?? '--';
+                unit = '°F';
+              } else if (_selectedVitalTab == 'rr') {
+                val = r['respiratory_rate'] ?? '--';
+                unit = 'rpm';
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(dateStr, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+                    Row(
+                      children: [
+                        Text('$val', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: valColor)),
+                        const SizedBox(width: 4),
+                        Text(unit, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── 4. One-Tap PHC Clinical Summary & Referral Slip Dialog ──
+  void _showPHCReferralSlipDialog(List<dynamic> records) {
+    if (records.isEmpty) return;
+    final latest = Map<String, dynamic>.from(records.first);
+    final name = _currentMember['full_name'] ?? _currentMember['name'] ?? 'Patient';
+    final age = _currentMember['age'] ?? 'Unknown';
+    final gender = _currentMember['gender'] ?? 'Unknown';
+    final abha = _currentMember['abha_id'] ?? 'Not Linked';
+    final nowStr = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.local_hospital, color: Color(0xFF00796B)),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'PHC / Emergency Referral Slip',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Patient: $name ($gender, $age yrs)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('ABHA ID: $abha', style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                    Text('Generated: $nowStr', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('Latest Bedside Physiological Readings:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              _slipRow('Blood Pressure', '${latest['blood_pressure_systolic'] ?? '?'}/${latest['blood_pressure_diastolic'] ?? '?'} mmHg'),
+              _slipRow('Pulse / HR', '${latest['pulse_rate'] ?? '?'} bpm'),
+              _slipRow('SpO2 Oxygen', '${latest['spo2'] ?? '?'} %'),
+              _slipRow('Core Temp', '${latest['temperature'] ?? '?'} °F'),
+              _slipRow('Resp Rate', '${latest['respiratory_rate'] ?? '?'} rpm'),
+              _slipRow('Blood Sugar', '${latest['blood_sugar_fasting'] ?? latest['blood_sugar_postprandial'] ?? '?'} mg/dL'),
+              if (latest['notes'] != null && (latest['notes'] as String).isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('ASHA Field Notes: "${latest['notes']}"', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+              ],
+              const Divider(height: 20),
+              const Text('Doctor Clinical Impression & Action:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 35),
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text('_____________________________\nPHC Medical Officer Signature', textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('📄 PHC Clinical Referral Slip generated successfully!')),
+              );
+            },
+            icon: const Icon(Icons.check),
+            label: const Text('Confirm & Print'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _slipRow(String label, String val) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          Text(val, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  // ── 1. Maternal ANC & PNC Clinical Healthcare Card ──
+  Widget _buildMaternalANCCard() {
+    final isPregnant = (_currentMember['is_pregnant'] == 1 || _currentMember['is_pregnant'] == true);
+    final isLactating = (_currentMember['is_lactating'] == 1 || _currentMember['is_lactating'] == true);
+    final gender = _currentMember['gender']?.toString().toLowerCase() ?? '';
+    final age = int.tryParse(_currentMember['age']?.toString() ?? '0') ?? 0;
+
+    // Show if pregnant, lactating, or female aged 12-50 with ANC record
+    if (!isPregnant && !isLactating) {
+      if (gender != 'female' || age < 12 || age > 50) return const SizedBox.shrink();
+    }
+
+    final lmpStr = _currentMember['lmp_date']?.toString();
+    final eddStr = _currentMember['edd_date']?.toString();
+    final isHighRisk = (_currentMember['is_high_risk_pregnancy'] == 1 || _currentMember['is_high_risk_pregnancy'] == true);
+    final td1 = (_currentMember['td1_vaccine'] == 1 || _currentMember['td1_vaccine'] == true);
+    final td2 = (_currentMember['td2_vaccine'] == 1 || _currentMember['td2_vaccine'] == true);
+    final tdBooster = (_currentMember['td_booster'] == 1 || _currentMember['td_booster'] == true);
+    final ifa = (_currentMember['ifa_tablets_given'] as int?) ?? 0;
+    final calcium = (_currentMember['calcium_tablets_given'] as int?) ?? 0;
+
+    int weeks = 0;
+    String stageText = 'ANC Registered';
+    String daysLeftText = '';
+    if (lmpStr != null) {
+      final lmp = DateTime.tryParse(lmpStr);
+      if (lmp != null) {
+        final days = DateTime.now().difference(lmp).inDays;
+        weeks = (days / 7).floor();
+        if (weeks >= 28) {
+          stageText = 'Week $weeks • 3rd Trimester (Pre-Delivery)';
+        } else if (weeks >= 13) {
+          stageText = 'Week $weeks • 2nd Trimester (Growth)';
+        } else {
+          stageText = 'Week $weeks • 1st Trimester (Organogenesis)';
+        }
+        final edd = lmp.add(const Duration(days: 280));
+        final diffDays = edd.difference(DateTime.now()).inDays;
+        if (diffDays > 0) {
+          daysLeftText = '👶 Due in ~$diffDays days (${DateFormat('dd MMM yyyy').format(edd)})';
+        } else {
+          daysLeftText = '👶 Due date reached (${DateFormat('dd MMM yyyy').format(edd)})';
+        }
+      }
+    } else if (eddStr != null) {
+      daysLeftText = '👶 Expected Delivery: $eddStr';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.pink.shade50, Colors.purple.shade50.withAlpha(100)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.pink.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.pink.shade100.withAlpha(80),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.pink.shade100, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.pregnant_woman, color: Colors.pink, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Maternal Health & Reproductive Care', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.pink)),
+                    Text(isPregnant ? 'Active ANC Protocol • 4 Mandatory Checkups' : 'Postnatal & Lactation Care', style: TextStyle(fontSize: 11, color: Colors.purple.shade700)),
+                  ],
+                ),
+              ),
+              if (isHighRisk)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red)),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning, color: Colors.red, size: 12),
+                      SizedBox(width: 4),
+                      Text('HRP HIGH RISK', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 10)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Gestational Progress Banner
+          if (isPregnant) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.pink.shade100)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('🌸 $stageText', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purple)),
+                      Text('${(weeks / 40 * 100).clamp(0, 100).toStringAsFixed(0)}% Term', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.pink.shade700)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: (weeks / 40).clamp(0.0, 1.0),
+                      backgroundColor: Colors.pink.shade100,
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.pink),
+                      minHeight: 6,
+                    ),
+                  ),
+                  if (daysLeftText.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(daysLeftText, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.teal.shade800)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // ANC 4-Checkup Protocol Grid
+          const Text('Mandatory ANC Visit Milestones (GoI Guidelines):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _ancStagePill('ANC 1', '≤12 Wks', weeks >= 1, Colors.teal),
+              const SizedBox(width: 6),
+              _ancStagePill('ANC 2', '14-26 Wks', weeks >= 14, Colors.blue),
+              const SizedBox(width: 6),
+              _ancStagePill('ANC 3', '28-34 Wks', weeks >= 28, Colors.amber.shade800),
+              const SizedBox(width: 6),
+              _ancStagePill('ANC 4', '36+ Wks', weeks >= 36, Colors.purple),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Td Vaccine & Nutrition Tablets Grid
+          Row(
+            children: [
+              // Vaccines
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.vaccines, size: 14, color: Colors.teal),
+                          SizedBox(width: 4),
+                          Text('Td Injections', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('• Td-1: ${td1 ? "✅ Given" : "⏳ Pending"}', style: TextStyle(fontSize: 10, color: td1 ? Colors.green.shade800 : Colors.black87)),
+                      Text('• Td-2: ${td2 ? "✅ Given" : "⏳ Pending"}', style: TextStyle(fontSize: 10, color: td2 ? Colors.green.shade800 : Colors.black87)),
+                      Text('• Booster: ${tdBooster ? "✅ Given" : "—"}', style: const TextStyle(fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Nutrition Tablets
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.medication, size: 14, color: Colors.pink),
+                          SizedBox(width: 4),
+                          Text('Supplementation', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('• IFA Tablets: $ifa / 180', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                      Text('• Calcium: $calcium / 360', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                      Text('• Deworming: ${weeks >= 14 ? "✅ Done" : "⏳ 2nd Tri"}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 7-Stage Postnatal Care (PNC) Timeline
+          if (isLactating || !isPregnant) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.purple.shade100)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.child_friendly, size: 14, color: Colors.purple),
+                          SizedBox(width: 4),
+                          Text('HBNC / PNC Home Visits', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.purple)),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(6)),
+                        child: const Text('🍼 100% EBF Active', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.teal)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _pncDayBadge('Day 1'),
+                        _pncDayBadge('Day 3'),
+                        _pncDayBadge('Day 7'),
+                        _pncDayBadge('Day 14'),
+                        _pncDayBadge('Day 21'),
+                        _pncDayBadge('Day 28'),
+                        _pncDayBadge('Day 42'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          // Red-Flag Danger Signs Checklist
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50.withAlpha(100),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Maternal Red Flags: Severe headache, vision blur, facial edema, epigastric pain, bleeding, or reduced baby kicks ➔ Call 108 Emergency Ambulance!',
+                    style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ancStagePill(String title, String timing, bool active, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: active ? color.withAlpha(30) : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: active ? color : Colors.grey.shade300),
+        ),
+        child: Column(
+          children: [
+            Text(title, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: active ? color : Colors.grey)),
+            Text(timing, style: TextStyle(fontSize: 8, color: active ? color.withAlpha(200) : Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pncDayBadge(String day) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.purple.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.purple.shade200),
+      ),
+      child: Text(day, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.purple)),
+    );
+  }
+
+  // ── 2. Pediatric Child Growth & Immunization Card (< 5 Years) ──
+  Widget _buildPediatricChildCard() {
+    final age = int.tryParse(_currentMember['age']?.toString() ?? '0') ?? 0;
+    if (age >= 5) return const SizedBox.shrink();
+
+    final birthWeight = (_currentMember['birth_weight'] as num?)?.toDouble();
+    final deliveryType = _currentMember['delivery_type']?.toString() ?? 'Institutional (Hospital/PHC)';
+    final muac = (_currentMember['muac_cm'] as num?)?.toDouble();
+
+    String muacStatus = 'Normal Nutritional State';
+    Color muacColor = Colors.green;
+    if (muac != null) {
+      if (muac < 11.5) {
+        muacStatus = '🔴 SAM (Severe Acute Malnutrition - NRC Urgent)';
+        muacColor = Colors.red;
+      } else if (muac < 12.5) {
+        muacStatus = '🟡 MAM (Moderate Malnutrition - Supplementary Food)';
+        muacColor = Colors.orange;
+      } else {
+        muacStatus = '🟢 Green Zone (Healthy Nutritional Growth)';
+        muacColor = Colors.green;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade50, Colors.teal.shade50.withAlpha(100)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.blue.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.shade100.withAlpha(80),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.child_care, color: Colors.blue, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Pediatric Health & Immunization ($age Yrs)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blue)),
+                    const Text('Universal Immunization Program (UIP) • Growth Tracking', style: TextStyle(fontSize: 11, color: Colors.teal)),
+                  ],
+                ),
+              ),
+              if (birthWeight != null && birthWeight < 2.5)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange)),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.favorite, color: Colors.orange, size: 12),
+                      SizedBox(width: 4),
+                      Text('LBW / KMC Care', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 10)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Birth Weight & Delivery Type
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Birth Weight', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      Text(birthWeight != null ? '$birthWeight kg' : 'Not Recorded', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      Text(birthWeight != null && birthWeight < 2.5 ? '⚠️ Low Birth Weight' : '🟢 Normal Weight', style: TextStyle(fontSize: 9, color: birthWeight != null && birthWeight < 2.5 ? Colors.orange : Colors.green)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Delivery Place', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      Text(deliveryType.contains('Inst') ? '🏥 Institutional' : '🏡 Home Delivery', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      const Text('Safe Birth Protocol', style: TextStyle(fontSize: 9, color: Colors.teal)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Interactive MUAC Malnutrition Color Tape Gauge
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.shade100)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.straighten, size: 14, color: Colors.teal),
+                        const SizedBox(width: 4),
+                        const Text('MUAC Arm Tape Screening', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      ],
+                    ),
+                    Text(muac != null ? '$muac cm' : 'Tap to Record', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: muacColor)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Visual Color Scale Bar
+                Row(
+                  children: [
+                    Expanded(flex: 2, child: Container(height: 6, decoration: BoxDecoration(color: Colors.red, borderRadius: const BorderRadius.horizontal(left: Radius.circular(4))))),
+                    Expanded(flex: 2, child: Container(height: 6, color: Colors.orange)),
+                    Expanded(flex: 6, child: Container(height: 6, decoration: BoxDecoration(color: Colors.green, borderRadius: const BorderRadius.horizontal(right: Radius.circular(4))))),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(muacStatus, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: muacColor)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // National Immunization Schedule (NIS)
+          const Text('National Immunization Schedule (NIS):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+            child: Column(
+              children: [
+                _vaccineRow('At Birth', 'BCG, OPV-0, Hepatitis-B', true),
+                const Divider(height: 10),
+                _vaccineRow('6, 10, 14 Wks', 'Pentavalent 1-2-3, Rotavirus, IPV, PCV', age >= 1),
+                const Divider(height: 10),
+                _vaccineRow('9–12 Months', 'Measles-Rubella (MR-1), Vitamin A', age >= 1),
+                const Divider(height: 10),
+                _vaccineRow('16–24 Months', 'MR-2, DPT Booster-1, OPV Booster', age >= 2),
+                const Divider(height: 10),
+                _vaccineRow('5–6 Years', 'DPT Booster-2', age >= 5),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // IMNCI Infant Danger Signs
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50.withAlpha(100),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.emergency, color: Colors.red, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Infant Danger Signs (IMNCI): Unable to suck milk, persistent vomiting, fast breathing (>50 bpm = Pneumonia), chest indrawing, or cold limbs ➔ Immediate Referral to Pediatric PHC/SNCU!',
+                    style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _vaccineRow(String stage, String vaccines, bool completed) {
+    return Row(
+      children: [
+        Icon(completed ? Icons.check_circle : Icons.radio_button_unchecked, size: 14, color: completed ? Colors.green : Colors.grey),
+        const SizedBox(width: 8),
+        SizedBox(width: 85, child: Text(stage, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
+        Expanded(child: Text(vaccines, style: TextStyle(fontSize: 10, color: completed ? Colors.black87 : Colors.grey.shade700))),
+      ],
+    );
+  }
+
+
 
   // ─────────────────────────────────────────────────────────────────────
   // Tab 3: AI Health Intelligence (NEWS2 + DELTA + PhysioNet 2019 Sepsis)
@@ -2056,51 +3295,80 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             ),
             const SizedBox(height: 10),
             
-            // GGUF Download Status Banner
+            // GGUF Download Status Banner (Disappears completely once model is downloaded!)
             ValueListenableBuilder<bool>(
               valueListenable: OnDeviceLLMService.isModelDownloadedNotifier,
               builder: (context, isDownloaded, _) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isDownloaded ? Colors.teal.shade50 : Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: isDownloaded ? Colors.teal.shade200 : Colors.amber.shade300),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isDownloaded ? Icons.offline_bolt : Icons.download_for_offline_outlined,
-                        size: 18,
-                        color: isDownloaded ? const Color(0xFF00796B) : Colors.amber.shade900,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          isDownloaded
-                              ? '⚡ Full T7 Clinical AI-1.7B GGUF Model Loaded (100% On-Device Generative AI)'
-                              : 'T7 Clinical AI 1.0GB GGUF Model Weights Not Downloaded (~986 MB for full GGUF generative LLM)',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: isDownloaded ? const Color(0xFF004D40) : Colors.amber.shade900,
+                if (isDownloaded) {
+                  return const SizedBox.shrink(); // Download header is gone once downloaded!
+                }
+                return ValueListenableBuilder<bool>(
+                  valueListenable: OnDeviceLLMService.isDownloadingNotifier,
+                  builder: (context, isDownloading, _) {
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: OnDeviceLLMService.isPausedNotifier,
+                      builder: (context, isPaused, _) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isPaused ? Colors.orange.shade50 : (isDownloading ? Colors.blue.shade50 : Colors.amber.shade50),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isPaused
+                                  ? Colors.orange.shade300
+                                  : (isDownloading ? Colors.blue.shade300 : Colors.amber.shade300),
+                            ),
                           ),
-                        ),
-                      ),
-                      if (!isDownloaded)
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            backgroundColor: const Color(0xFF00796B),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isDownloading
+                                    ? Icons.downloading_rounded
+                                    : (isPaused ? Icons.pause_circle_filled : Icons.download_for_offline_outlined),
+                                size: 18,
+                                color: isPaused
+                                    ? Colors.orange.shade900
+                                    : (isDownloading ? Colors.blue.shade900 : Colors.amber.shade900),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  isDownloading
+                                      ? 'Downloading Offline Model... Tap to manage.'
+                                      : (isPaused
+                                          ? 'Download Paused • Tap Resume to continue.'
+                                          : 'Optional: Download Offline GGUF Neural Model (~1.04 GB)'),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isPaused
+                                        ? Colors.orange.shade900
+                                        : (isDownloading ? Colors.blue.shade900 : Colors.amber.shade900),
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  backgroundColor: isDownloading
+                                      ? Colors.orange.shade600
+                                      : (isPaused ? const Color(0xFF00796B) : const Color(0xFF00796B)),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                onPressed: () {
+                                  _showGgufDownloadDialog(context);
+                                },
+                                child: Text(
+                                  isDownloading ? 'Pause' : (isPaused ? 'Resume' : 'Download'),
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
                           ),
-                          onPressed: () {
-                            _showGgufDownloadDialog(context);
-                          },
-                          child: const Text('Download', style: TextStyle(fontSize: 11)),
-                        ),
-                    ],
-                  ),
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),
@@ -2233,71 +3501,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   }
 
   void _showGgufDownloadDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.downloading_rounded, color: Color(0xFF00796B)),
-              SizedBox(width: 8),
-              Text('Download T7 Clinical AI (1.5B GGUF)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'This will download the 1.0 GB quantized T7 Clinical AI model weights from HuggingFace to your device storage for 100% offline generative AI.',
-                style: TextStyle(fontSize: 13, color: Colors.black87),
-              ),
-              const SizedBox(height: 16),
-              ValueListenableBuilder<double>(
-                valueListenable: OnDeviceLLMService.downloadProgressNotifier,
-                builder: (context, progress, _) {
-                  return Column(
-                    children: [
-                      LinearProgressIndicator(value: progress, minHeight: 8),
-                      const SizedBox(height: 8),
-                      ValueListenableBuilder<String>(
-                        valueListenable: OnDeviceLLMService.downloadStatusNotifier,
-                        builder: (context, status, _) {
-                          return Text(status, style: const TextStyle(fontSize: 11, color: Colors.grey));
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white),
-              icon: const Icon(Icons.download),
-              label: const Text('Start Download (~986 MB)'),
-              onPressed: () async {
-                final success = await OnDeviceLLMService.downloadModel();
-                if (ctx.mounted && success) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('T7 Clinical AI Model Downloaded Successfully!')),
-                  );
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
+    OnDeviceLLMService.showModelManagementDialog(context);
   }
 
   // ── Clinical Action Card ──

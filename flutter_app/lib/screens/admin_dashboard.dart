@@ -487,27 +487,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final name = '${worker['first_name']} ${worker['last_name']}'.trim();
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 10, offset: const Offset(0, 4))]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(10),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: IntrinsicHeight(child: Row(children: [
-          Container(width: 5, color: Colors.teal),
-          Expanded(child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(radius: 28, backgroundColor: Colors.teal.shade50, backgroundImage: ImageUtils.safeBase64Image(worker['profile_image'])),
-            title: Text(name.isEmpty ? (worker['username'] ?? 'Worker') : name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SizedBox(height: 4),
-              Text('ID: ${worker['id']} • ${worker['phone_number']}', style: const TextStyle(fontSize: 12)),
-              const SizedBox(height: 4),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(4)), child: Text(worker['state_name'] ?? 'N/A', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal))),
-            ]),
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.teal), onPressed: () => _showEditWorkerDialog(worker)),
-              IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), onPressed: () => _deleteWorker(worker)),
-            ]),
-          )),
-        ])),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Container(width: 5, color: const Color(0xFF00796B)),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 26,
+                        backgroundColor: Colors.teal.shade50,
+                        backgroundImage: ImageUtils.safeBase64Image(worker['profile_image']),
+                        child: worker['profile_image'] == null ? const Icon(Icons.person, color: Color(0xFF00796B)) : null,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name.isEmpty ? (worker['username'] ?? 'Worker') : name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'ID: ${worker['id']} • ${worker['phone_number'] ?? 'No Phone'}',
+                              style: const TextStyle(fontSize: 12, color: Colors.black54),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.teal.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                worker['state_name'] ?? 'N/A',
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF00796B)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, color: Color(0xFF00796B), size: 20),
+                        onPressed: () => _showEditWorkerDialog(worker),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                        onPressed: () => _deleteWorker(worker),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

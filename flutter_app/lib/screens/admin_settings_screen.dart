@@ -517,78 +517,103 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               ),
               child: Column(
                 children: [
-                  // Auto-Import Tile
+                  // Auto-Import Card
                   FutureBuilder<Map<String, int>>(
                     future: _statsFuture,
                     builder: (context, snapshot) {
                       final statesCount = snapshot.data?['states'] ?? 0;
                       final isFullyImported = statesCount >= 36;
-                      return ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: isFullyImported ? Colors.green.shade50 : Colors.teal.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            isFullyImported ? Icons.check_circle_rounded : Icons.bolt_rounded,
-                            color: isFullyImported ? Colors.green.shade700 : const Color(0xFF00796B),
-                            size: 28,
-                          ),
-                        ),
-                        title: Row(
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Auto-Import India Data',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isFullyImported ? Colors.green.shade50 : Colors.teal.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    isFullyImported ? Icons.check_circle_rounded : Icons.bolt_rounded,
+                                    color: isFullyImported ? Colors.green.shade700 : const Color(0xFF00796B),
+                                    size: 26,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Text(
+                                            'Auto-Import India Data',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                          ),
+                                          if (isFullyImported) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green.shade100,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                '36/36 Loaded',
+                                                style: TextStyle(color: Colors.green.shade800, fontSize: 10, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        isFullyImported
+                                            ? 'All 36 States/UTs and ~700+ Districts are loaded in the database.'
+                                            : 'Directly loads all 36 States/UTs and ~700+ Districts without manual entry.',
+                                        style: const TextStyle(fontSize: 12, color: Colors.black54, height: 1.3),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            if (isFullyImported) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade100,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '36/36 Loaded',
-                                  style: TextStyle(color: Colors.green.shade800, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: _isSeeding
+                                  ? const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                                        child: SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                                        ),
+                                      ),
+                                    )
+                                  : ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isFullyImported ? Colors.grey.shade100 : const Color(0xFF00796B),
+                                        foregroundColor: isFullyImported ? Colors.teal.shade800 : Colors.white,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                      ),
+                                      onPressed: _handleSeedIndiaData,
+                                      icon: Icon(isFullyImported ? Icons.sync_rounded : Icons.download_rounded, size: 18),
+                                      label: Text(
+                                        isFullyImported ? 'Re-sync All 36 States & Districts' : '📥 Import Master Data (~700+ Districts)',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ),
+                            ),
                           ],
                         ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            isFullyImported
-                                ? 'All 36 States/UTs and ~700+ Districts are loaded in the database.'
-                                : 'Directly loads all 36 States/UTs and ~700+ Districts without manual entry.',
-                            style: const TextStyle(fontSize: 12, color: Colors.black54),
-                          ),
-                        ),
-                        trailing: _isSeeding
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2.5),
-                              )
-                            : ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: isFullyImported ? Colors.grey.shade100 : const Color(0xFF00796B),
-                                  foregroundColor: isFullyImported ? Colors.teal.shade800 : Colors.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
-                                onPressed: _handleSeedIndiaData,
-                                icon: Icon(isFullyImported ? Icons.sync_rounded : Icons.download_rounded, size: 16),
-                                label: Text(
-                                  isFullyImported ? 'Re-sync' : 'Import',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                              ),
                       );
                     },
                   ),
@@ -662,25 +687,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   const Divider(height: 1),
 
                   // Manage & Edit All Jurisdictions Tile
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.edit_location_alt_rounded, color: Color(0xFF00796B), size: 24),
-                    ),
-                    title: const Text(
-                      'Manage & Edit Jurisdictions',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF263238)),
-                    ),
-                    subtitle: const Text(
-                      'Open full editor to rename or delete states, districts & areas.',
-                      style: TextStyle(fontSize: 11, color: Colors.black54),
-                    ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black38),
+                  InkWell(
                     onTap: () async {
                       await Navigator.push(
                         context,
@@ -695,44 +702,93 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                         _statsFuture = LocalDbService.getSystemStats();
                       });
                     },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.edit_location_alt_rounded, color: Color(0xFF00796B), size: 24),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Manage & Edit Jurisdictions',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF263238)),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Open full editor to rename or delete states, districts & areas.',
+                                  style: TextStyle(fontSize: 11, color: Colors.black54),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black38),
+                        ],
+                      ),
+                    ),
                   ),
 
                   const Divider(height: 1),
 
                   // Reset Master Data Tile
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    leading: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.delete_sweep_rounded, color: Colors.red.shade400, size: 24),
-                    ),
-                    title: const Text(
-                      'Clear Jurisdictions Data',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.redAccent),
-                    ),
-                    subtitle: const Text(
-                      'Remove all loaded states, districts, and areas.',
-                      style: TextStyle(fontSize: 11, color: Colors.black45),
-                    ),
-                    trailing: _isClearing
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
-                          )
-                        : OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.redAccent,
-                              side: BorderSide(color: Colors.red.shade200),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            onPressed: _handleClearJurisdictions,
-                            child: const Text('Reset', style: TextStyle(fontSize: 12)),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
                           ),
+                          child: Icon(Icons.delete_sweep_rounded, color: Colors.red.shade400, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Clear Jurisdictions Data',
+                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.redAccent),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Remove all loaded states, districts, and areas.',
+                                style: TextStyle(fontSize: 11, color: Colors.black45),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _isClearing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                              )
+                            : OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.redAccent,
+                                  side: BorderSide(color: Colors.red.shade200),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                ),
+                                onPressed: _handleClearJurisdictions,
+                                child: const Text('Reset', style: TextStyle(fontSize: 12)),
+                              ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -861,6 +917,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             ),
             const SizedBox(height: 12),
             Container(
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -873,39 +930,55 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   ),
                 ],
               ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.shade50,
-                    borderRadius: BorderRadius.circular(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.cloud_download_rounded, color: Color(0xFF00796B), size: 26),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Current Version: v${AppUpdateService.currentVersion}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Auto-built via GitHub Releases CI/CD',
+                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.cloud_download_rounded, color: Color(0xFF00796B), size: 26),
-                ),
-                title: const Text(
-                  'Current Version: v${AppUpdateService.currentVersion}',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                subtitle: const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Text(
-                    'Auto-built via GitHub Releases CI/CD',
-                    style: TextStyle(fontSize: 11, color: Colors.black54),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00796B),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: () => AppUpdateService.checkAndPromptUpdate(context),
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Check for Updates', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
                   ),
-                ),
-                trailing: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00796B),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  onPressed: () => AppUpdateService.checkAndPromptUpdate(context),
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                ),
+                ],
               ),
             ),
 

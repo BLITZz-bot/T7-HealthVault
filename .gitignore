@@ -32,3 +32,23 @@ flutter_app/.pub/
 *.iml
 .vscode/
 Thumbs.db
+
+# Security & Secrets (Never commit secrets or signing keys)
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+key.properties
+local.properties
+
+# Code Obfuscation & Debug Symbols (Anti-Reverse Engineering)
+**/symbols/
+symbols/
+*.symbols
+*.map.json
+flutter_app/symbols/
+build_symbols/

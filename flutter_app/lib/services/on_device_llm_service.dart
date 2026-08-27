@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'language_service.dart';
+import '../widgets/qwen_ai_chat_modal.dart';
 
 /// On-Device LLM & Multilingual Clinical Intelligence Service for T7 Clinical AI
 /// Supports 22 Scheduled Indian Languages + English with open-ended dynamic clinical reasoning.
@@ -12,25 +12,72 @@ class OnDeviceLLMService {
   static const String modelDownloadUrl =
       'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf';
   
-  static const int estimatedSizeBytes = 986 * 1024 * 1024; // ~986 MB
+  static const int estimatedSizeBytes = 1117320736; // 1,117,320,736 bytes (~1.04 GB)
 
   static final ValueNotifier<bool> isModelDownloadedNotifier = ValueNotifier<bool>(false);
   static final ValueNotifier<bool> isDownloadingNotifier = ValueNotifier<bool>(false);
+  static final ValueNotifier<bool> isPausedNotifier = ValueNotifier<bool>(false);
   static final ValueNotifier<double> downloadProgressNotifier = ValueNotifier<double>(0.0);
   static final ValueNotifier<String> downloadStatusNotifier = ValueNotifier<String>('');
+  static final ValueNotifier<int> bytesDownloadedNotifier = ValueNotifier<int>(0);
+  static final ValueNotifier<int> totalBytesNotifier = ValueNotifier<int>(estimatedSizeBytes);
 
   static bool _initialized = false;
+  static HttpClient? _activeHttpClient;
+  static bool _isPausedRequested = false;
+  static bool _isCancelledRequested = false;
 
-  /// Check if model exists locally on startup
+  /// Check if model exists locally on startup, or if a resumable partial download exists
   static Future<void> initialize() async {
     if (_initialized) return;
-    final file = await getModelFile();
-    if (await file.exists() && (await file.length()) > 500 * 1024 * 1024) {
-      isModelDownloadedNotifier.value = true;
-      downloadStatusNotifier.value = 'T7 Clinical AI Ready (On-Device)';
-    } else {
+    try {
+      final targetFile = await getModelFile();
+      final tempFile = File('${targetFile.path}.tmp');
+
+      if (await targetFile.exists()) {
+        final length = await targetFile.length();
+        if (length > 500 * 1024 * 1024) {
+          isModelDownloadedNotifier.value = true;
+          isDownloadingNotifier.value = false;
+          isPausedNotifier.value = false;
+          downloadProgressNotifier.value = 1.0;
+          bytesDownloadedNotifier.value = length;
+          totalBytesNotifier.value = length;
+          final mb = (length / (1024 * 1024)).toStringAsFixed(1);
+          downloadStatusNotifier.value = 'T7 Clinical AI Ready ($mb MB On-Device)';
+          _initialized = true;
+          return;
+        }
+      }
+
+      // Check for resumable partial download from previous session
+      if (await tempFile.exists()) {
+        final partialBytes = await tempFile.length();
+        if (partialBytes > 0) {
+          isModelDownloadedNotifier.value = false;
+          isDownloadingNotifier.value = false;
+          isPausedNotifier.value = true;
+          bytesDownloadedNotifier.value = partialBytes;
+          totalBytesNotifier.value = estimatedSizeBytes;
+          final progress = (partialBytes / estimatedSizeBytes).clamp(0.0, 1.0);
+          downloadProgressNotifier.value = progress;
+          final mb = (partialBytes / (1024 * 1024)).toStringAsFixed(1);
+          final totalMb = (estimatedSizeBytes / (1024 * 1024)).toStringAsFixed(1);
+          downloadStatusNotifier.value = 'Download Paused ($mb / $totalMb MB • ${(progress * 100).toStringAsFixed(1)}%) • Tap Resume to Continue';
+          _initialized = true;
+          return;
+        }
+      }
+
       isModelDownloadedNotifier.value = false;
-      downloadStatusNotifier.value = 'Model Not Downloaded (~986 MB)';
+      isDownloadingNotifier.value = false;
+      isPausedNotifier.value = false;
+      downloadProgressNotifier.value = 0.0;
+      bytesDownloadedNotifier.value = 0;
+      downloadStatusNotifier.value = 'Ready (Built-in Clinical AI Active) • Optional GGUF Model (~1.04 GB)';
+    } catch (e) {
+      isModelDownloadedNotifier.value = false;
+      downloadStatusNotifier.value = 'Ready: Built-in Clinical Intelligence Active';
     }
     _initialized = true;
   }
@@ -45,64 +92,530 @@ class OnDeviceLLMService {
     return File('${modelsDir.path}/$modelFileName');
   }
 
-  /// Download GGUF Model weights with progress tracking
+  /// Check exact model size on disk
+  static Future<int> getLocalModelSize() async {
+    try {
+      final file = await getModelFile();
+      if (await file.exists()) {
+        return await file.length();
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Pause an ongoing download (preserves all downloaded bytes for resuming)
+  static void pauseDownload() {
+    _isPausedRequested = true;
+    _activeHttpClient?.close(force: true);
+    _activeHttpClient = null;
+    isDownloadingNotifier.value = false;
+    isPausedNotifier.value = true;
+
+    final downloaded = bytesDownloadedNotifier.value;
+    final total = totalBytesNotifier.value > 0 ? totalBytesNotifier.value : estimatedSizeBytes;
+    final mb = (downloaded / (1024 * 1024)).toStringAsFixed(1);
+    final totalMb = (total / (1024 * 1024)).toStringAsFixed(1);
+    final pct = (downloaded / total * 100).clamp(0.0, 100.0).toStringAsFixed(1);
+    downloadStatusNotifier.value = 'Download Paused ($mb / $totalMb MB • $pct%) • Ready to Resume';
+  }
+
+  /// Download or Resume GGUF Model weights with HTTP Range support, pause/continue, speed, and ETA
   static Future<bool> downloadModel({Function(double progress, String status)? onProgress}) async {
     if (isDownloadingNotifier.value) return false;
     isDownloadingNotifier.value = true;
-    downloadProgressNotifier.value = 0.0;
-    downloadStatusNotifier.value = 'Connecting to HuggingFace...';
+    isPausedNotifier.value = false;
+    _isPausedRequested = false;
+    _isCancelledRequested = false;
+
+    IOSink? sink;
+    File? tempFile;
 
     try {
-      final file = await getModelFile();
-      final request = http.Request('GET', Uri.parse(modelDownloadUrl));
-      final response = await http.Client().send(request);
+      final targetFile = await getModelFile();
+      tempFile = File('${targetFile.path}.tmp');
 
-      if (response.statusCode != 200) {
-        throw Exception('Download failed with status code ${response.statusCode}');
+      int existingBytes = 0;
+      if (await tempFile.exists()) {
+        existingBytes = await tempFile.length();
       }
 
-      final contentLength = response.contentLength ?? estimatedSizeBytes;
-      int bytesDownloaded = 0;
+      bytesDownloadedNotifier.value = existingBytes;
+      final resumePercent = (existingBytes / estimatedSizeBytes * 100).clamp(0.0, 100.0).toStringAsFixed(1);
+      downloadStatusNotifier.value = existingBytes > 0
+          ? 'Resuming from ${(existingBytes / (1024 * 1024)).toStringAsFixed(1)} MB ($resumePercent%)...'
+          : 'Connecting to HuggingFace repository...';
 
-      final sink = file.openWrite();
+      _activeHttpClient = HttpClient();
+      _activeHttpClient!.connectionTimeout = const Duration(seconds: 25);
 
-      await for (final chunk in response.stream) {
-        bytesDownloaded += chunk.length;
-        sink.add(chunk);
+      Uri currentUri = Uri.parse(modelDownloadUrl);
+      HttpClientResponse? response;
 
-        final progress = (bytesDownloaded / contentLength).clamp(0.0, 1.0);
-        downloadProgressNotifier.value = progress;
-        
-        final mbDownloaded = (bytesDownloaded / (1024 * 1024)).toStringAsFixed(1);
-        final mbTotal = (contentLength / (1024 * 1024)).toStringAsFixed(1);
-        final statusStr = 'Downloading T7 Clinical AI: $mbDownloaded / $mbTotal MB (${(progress * 100).toStringAsFixed(1)}%)';
+      // Handle redirect manually to preserve HTTP Range headers
+      for (int redirectCount = 0; redirectCount < 5; redirectCount++) {
+        if (_isPausedRequested || _isCancelledRequested) break;
 
-        downloadStatusNotifier.value = statusStr;
-        if (onProgress != null) {
-          onProgress(progress, statusStr);
+        final request = await _activeHttpClient!.getUrl(currentUri);
+        request.followRedirects = false;
+        request.headers.set(HttpHeaders.userAgentHeader, 'T7-HealthVault-Mobile/1.0');
+
+        if (existingBytes > 0) {
+          request.headers.set(HttpHeaders.rangeHeader, 'bytes=$existingBytes-');
+        }
+
+        response = await request.close();
+
+        if (response.isRedirect) {
+          final location = response.headers.value(HttpHeaders.locationHeader);
+          if (location != null && location.isNotEmpty) {
+            currentUri = Uri.parse(location);
+            continue;
+          }
+        }
+        break;
+      }
+
+      if (response == null) {
+        throw Exception('Unable to establish connection with model repository.');
+      }
+
+      final statusCode = response.statusCode;
+      if (statusCode != HttpStatus.ok && statusCode != HttpStatus.partialContent) {
+        throw Exception('Server returned HTTP $statusCode');
+      }
+
+      // Determine total content length
+      int totalBytes = estimatedSizeBytes;
+      if (statusCode == HttpStatus.partialContent) {
+        final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
+        if (contentRange != null && contentRange.contains('/')) {
+          final totalStr = contentRange.split('/').last.trim();
+          totalBytes = int.tryParse(totalStr) ?? (existingBytes + response.contentLength);
+        } else {
+          totalBytes = existingBytes + response.contentLength;
+        }
+        sink = tempFile.openWrite(mode: FileMode.append);
+      } else {
+        // Full content from 0 (if server didn't support Range)
+        existingBytes = 0;
+        totalBytes = response.contentLength > 0 ? response.contentLength : estimatedSizeBytes;
+        sink = tempFile.openWrite(mode: FileMode.write);
+      }
+
+      totalBytesNotifier.value = totalBytes;
+      int currentBytesDownloaded = existingBytes;
+
+      final startTime = DateTime.now();
+      var lastNotifyTime = DateTime.now();
+      int sessionBytesDownloaded = 0;
+
+      await for (final chunk in response) {
+        if (_isPausedRequested) {
+          if (sink != null) {
+            await sink.flush();
+            await sink.close();
+            sink = null;
+          }
+          isDownloadingNotifier.value = false;
+          isPausedNotifier.value = true;
+          final mb = (currentBytesDownloaded / (1024 * 1024)).toStringAsFixed(1);
+          final totalMb = (totalBytes / (1024 * 1024)).toStringAsFixed(1);
+          final pct = (currentBytesDownloaded / totalBytes * 100).clamp(0.0, 100.0).toStringAsFixed(1);
+          downloadStatusNotifier.value = 'Download Paused ($mb / $totalMb MB • $pct%) • Ready to Resume';
+          _activeHttpClient?.close(force: true);
+          _activeHttpClient = null;
+          return false;
+        }
+
+        if (_isCancelledRequested) {
+          throw Exception('Download cancelled by user.');
+        }
+
+        currentBytesDownloaded += chunk.length;
+        sessionBytesDownloaded += chunk.length;
+        sink?.add(chunk);
+        bytesDownloadedNotifier.value = currentBytesDownloaded;
+
+        final now = DateTime.now();
+        if (now.difference(lastNotifyTime).inMilliseconds >= 100 || currentBytesDownloaded >= totalBytes) {
+          lastNotifyTime = now;
+          final progress = (currentBytesDownloaded / totalBytes).clamp(0.0, 1.0);
+          downloadProgressNotifier.value = progress;
+
+          final elapsedSeconds = now.difference(startTime).inMilliseconds / 1000.0;
+          final speedBytesPerSec = elapsedSeconds > 0 ? (sessionBytesDownloaded / elapsedSeconds) : 0.0;
+          final speedMbps = (speedBytesPerSec / (1024 * 1024)).toStringAsFixed(1);
+
+          final mbDownloaded = (currentBytesDownloaded / (1024 * 1024)).toStringAsFixed(1);
+          final mbTotal = (totalBytes / (1024 * 1024)).toStringAsFixed(1);
+
+          final remainingBytes = totalBytes - currentBytesDownloaded;
+          final etaSeconds = speedBytesPerSec > 0 ? (remainingBytes / speedBytesPerSec).round() : 0;
+          final etaStr = etaSeconds > 60 ? '${(etaSeconds / 60).toStringAsFixed(1)} min' : '${etaSeconds}s';
+
+          final statusStr = '$mbDownloaded / $mbTotal MB (${(progress * 100).toStringAsFixed(1)}%) • $speedMbps MB/s • ETA: $etaStr';
+          downloadStatusNotifier.value = statusStr;
+
+          if (onProgress != null) {
+            onProgress(progress, statusStr);
+          }
         }
       }
 
-      await sink.close();
+      if (sink != null) {
+        await sink.flush();
+        await sink.close();
+        sink = null;
+      }
+
+      if (_isPausedRequested) {
+        return false;
+      }
+
+      // Rename temp file to final target
+      if (await targetFile.exists()) {
+        await targetFile.delete();
+      }
+      await tempFile.rename(targetFile.path);
+
       isModelDownloadedNotifier.value = true;
       isDownloadingNotifier.value = false;
-      downloadStatusNotifier.value = 'T7 Clinical AI Ready (On-Device GGUF)';
+      isPausedNotifier.value = false;
+      downloadProgressNotifier.value = 1.0;
+      final finalMb = (currentBytesDownloaded / (1024 * 1024)).toStringAsFixed(1);
+      downloadStatusNotifier.value = 'T7 Clinical AI Ready ($finalMb MB On-Device)';
+      _activeHttpClient = null;
       return true;
     } catch (e) {
+      if (sink != null) {
+        try {
+          await sink.close();
+        } catch (_) {}
+      }
       isDownloadingNotifier.value = false;
-      downloadStatusNotifier.value = 'Download Error: ${e.toString()}';
+      _activeHttpClient = null;
+
+      if (_isPausedRequested) {
+        isPausedNotifier.value = true;
+        return false;
+      }
+
+      if (_isCancelledRequested) {
+        if (tempFile != null && await tempFile.exists()) {
+          try {
+            await tempFile.delete();
+          } catch (_) {}
+        }
+        isPausedNotifier.value = false;
+        downloadProgressNotifier.value = 0.0;
+        bytesDownloadedNotifier.value = 0;
+        downloadStatusNotifier.value = 'Download cancelled & cleared.';
+      } else {
+        // If network error occurred, keep bytes in tempFile so user can resume without losing data!
+        isPausedNotifier.value = true;
+        downloadStatusNotifier.value = 'Connection paused / interrupted. Tap Resume to continue.';
+      }
       return false;
     }
   }
 
-  /// Delete local GGUF model to free storage
+  /// Delete local GGUF model and any temporary partial download file to free storage completely
   static Future<void> deleteModel() async {
-    final file = await getModelFile();
-    if (await file.exists()) {
-      await file.delete();
+    _isCancelledRequested = true;
+    _activeHttpClient?.close(force: true);
+    _activeHttpClient = null;
+
+    final targetFile = await getModelFile();
+    if (await targetFile.exists()) {
+      await targetFile.delete();
     }
+    final tempFile = File('${targetFile.path}.tmp');
+    if (await tempFile.exists()) {
+      await tempFile.delete();
+    }
+
     isModelDownloadedNotifier.value = false;
-    downloadStatusNotifier.value = 'Model Deleted (~986 MB Freed)';
+    isDownloadingNotifier.value = false;
+    isPausedNotifier.value = false;
+    downloadProgressNotifier.value = 0.0;
+    bytesDownloadedNotifier.value = 0;
+    downloadStatusNotifier.value = 'Model & cache deleted • Built-in AI Active';
+  }
+
+  /// Unified Professional-Grade Model Management Dialog (used across Home, Member Detail, and Chat)
+  static void showModelManagementDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogContext, setModalState) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: isDownloadingNotifier,
+              builder: (context, isDownloading, _) {
+                return ValueListenableBuilder<bool>(
+                  valueListenable: isPausedNotifier,
+                  builder: (context, isPaused, _) {
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: isModelDownloadedNotifier,
+                      builder: (context, isDownloaded, _) {
+                        return AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          title: Row(
+                            children: [
+                              Icon(
+                                isDownloaded
+                                    ? Icons.verified_rounded
+                                    : (isDownloading
+                                        ? Icons.downloading_rounded
+                                        : (isPaused ? Icons.pause_circle_filled : Icons.download_for_offline)),
+                                color: isDownloaded
+                                    ? const Color(0xFF00796B)
+                                    : (isPaused ? Colors.orange.shade800 : const Color(0xFF00796B)),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  isDownloaded
+                                      ? 'T7 On-Device Clinical AI'
+                                      : (isPaused
+                                          ? 'Resume Model Download'
+                                          : (isDownloading ? 'Downloading AI Weights' : 'T7 Clinical AI Model')),
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          content: SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (isDownloaded) ...[
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.green.shade200),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: const [
+                                              Text(
+                                                'GGUF Neural Model Active (~1.04 GB)',
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green),
+                                              ),
+                                              SizedBox(height: 2),
+                                              Text(
+                                                '100% Offline neural weights are installed and active on this device.',
+                                                style: TextStyle(fontSize: 11, color: Colors.black87),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ] else if (isDownloading || isPaused) ...[
+                                  Text(
+                                    isPaused
+                                        ? 'Download paused. You can resume at any time from this exact point:'
+                                        : 'Downloading quantized neural weights from HuggingFace:',
+                                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ValueListenableBuilder<double>(
+                                    valueListenable: downloadProgressNotifier,
+                                    builder: (context, progress, _) {
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(6),
+                                            child: LinearProgressIndicator(
+                                              value: progress > 0 ? progress : null,
+                                              minHeight: 10,
+                                              backgroundColor: Colors.grey.shade200,
+                                              valueColor: AlwaysStoppedAnimation<Color>(
+                                                isPaused ? Colors.orange.shade700 : const Color(0xFF00796B),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          ValueListenableBuilder<String>(
+                                            valueListenable: downloadStatusNotifier,
+                                            builder: (context, status, _) {
+                                              return Text(
+                                                status,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isPaused ? Colors.orange.shade900 : const Color(0xFF004D40),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ] else ...[
+                                  const Text(
+                                    'Download the optional 1.04 GB Qwen2.5-1.5B neural model weights for enhanced offline generative reasoning. The built-in expert engine is already active and responsive!',
+                                    style: TextStyle(fontSize: 12, color: Colors.black87),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: const [
+                                        Icon(Icons.info_outline, color: Colors.blue, size: 18),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Downloads can be paused and resumed at any time, even after restarting the app.',
+                                            style: TextStyle(fontSize: 11, color: Colors.black87),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          actions: [
+                            if (isDownloading) ...[
+                              TextButton(
+                                onPressed: () async {
+                                  await deleteModel();
+                                  setModalState(() {});
+                                },
+                                child: const Text('Cancel & Clear', style: TextStyle(color: Colors.red)),
+                              ),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade600,
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.pause_rounded, size: 16),
+                                label: const Text('Pause'),
+                                onPressed: () {
+                                  pauseDownload();
+                                  setModalState(() {});
+                                },
+                              ),
+                            ] else if (isPaused) ...[
+                              TextButton.icon(
+                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                icon: const Icon(Icons.delete_outline, size: 16),
+                                label: const Text('Clear Progress'),
+                                onPressed: () async {
+                                  await deleteModel();
+                                  setModalState(() {});
+                                },
+                              ),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00796B),
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                                label: const Text('Resume Download'),
+                                onPressed: () async {
+                                  setModalState(() {});
+                                  final success = await downloadModel();
+                                  if (ctx.mounted) {
+                                    setModalState(() {});
+                                    if (success) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('T7 Clinical AI Model downloaded successfully!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            ] else if (isDownloaded) ...[
+                              TextButton.icon(
+                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                icon: const Icon(Icons.delete_outline, size: 16),
+                                label: const Text('Delete Model (~1.04 GB)'),
+                                onPressed: () async {
+                                  await deleteModel();
+                                  if (context.mounted) {
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Model deleted. Built-in engine remains active!')),
+                                    );
+                                  }
+                                },
+                              ),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00796B),
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                                label: const Text('Open AI Chat'),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  QwenAIChatModal.show(context);
+                                },
+                              ),
+                            ] else ...[
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: Text(LanguageService.tr('cancel')),
+                              ),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00796B),
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.download, size: 16),
+                                label: Text(LanguageService.tr('start_download', defaultText: 'Start Download (~1.04 GB)')),
+                                onPressed: () async {
+                                  setModalState(() {});
+                                  final success = await downloadModel();
+                                  if (ctx.mounted) {
+                                    setModalState(() {});
+                                    if (success) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('T7 Clinical AI Model downloaded successfully!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   /// Generate Generative Clinical Explanation using T7 Clinical AI
