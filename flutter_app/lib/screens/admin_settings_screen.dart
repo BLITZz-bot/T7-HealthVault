@@ -822,7 +822,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             ),
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -835,50 +834,39 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.teal.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.cloud_download_rounded, color: Color(0xFF00796B), size: 26),
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Current Version: v${AppUpdateService.currentVersion}',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Auto-built via GitHub Releases CI/CD',
-                              style: TextStyle(fontSize: 11, color: Colors.black54),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00796B),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        ),
-                        onPressed: () => AppUpdateService.checkAndPromptUpdate(context),
-                        icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text('Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      ),
-                    ],
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.shade50,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
+                  child: const Icon(Icons.cloud_download_rounded, color: Color(0xFF00796B), size: 26),
+                ),
+                title: const Text(
+                  'Current Version: v${AppUpdateService.currentVersion}',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                subtitle: const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Text(
+                    'Auto-built via GitHub Releases CI/CD',
+                    style: TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
+                ),
+                trailing: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00796B),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  onPressed: () => AppUpdateService.checkAndPromptUpdate(context),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                ),
               ),
             ),
 
