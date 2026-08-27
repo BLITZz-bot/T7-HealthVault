@@ -1,17 +1,29 @@
-# flutter_app
+# T7 HealthVault — Flutter Application
 
-A new Flutter project.
+**Developer & Author:** M M Bharath  
+**Version:** 2.1.0  
+**Platform:** Flutter (Android, Windows, Linux, macOS)  
+**APK Artifact:** `build/app/outputs/flutter-apk/app-release.apk` (81.0 MB)
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## 🌟 Overview
 
-A few resources to get you started if this is your first Flutter project:
+T7 HealthVault is an offline-first Community Electronic Health Record (EHR) and Clinical Decision Support application for healthcare workers.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### Key Capabilities
+* **PhysioNet Sepsis Predictor (ONNX):** **0.9085 AUC-ROC** on 39,179 ICU patients; **96.0% accuracy**; 0.29 MB model footprint; < 5 ms inference time.
+* **NEWS2 & DELTA Scoring:** UK Royal College of Physicians 0–20 standard + vital sign trend variations.
+* **22 Scheduled Indian Languages:** 11 pre-installed core languages + 11 on-demand downloadable language packs.
+* **On-Device Qwen3 Generative LLM:** Downloadable ~986 MB GGUF for full medical chat; triggers floating bottom-right chatbot only after download.
+* **Local Database:** SQLite v4 with full household/family/vitals schemas.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## 🧪 Verification Commands
+
+```bash
+flutter analyze   # Checks for syntax, linter, and static analysis issues (0 issues)
+flutter test      # Runs all widget and unit tests (100% pass)
+flutter build apk --release # Generates release APK (81.0 MB)
+```

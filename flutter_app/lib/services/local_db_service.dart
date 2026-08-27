@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../data/india_data.dart';
 
 class LocalDbService {
   static Database? _db;
@@ -17,7 +18,7 @@ class LocalDbService {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE users(
@@ -98,6 +99,8 @@ class LocalDbService {
             blood_pressure_diastolic INTEGER,
             temperature REAL,
             pulse_rate INTEGER,
+            spo2 INTEGER,
+            respiratory_rate INTEGER,
             notes TEXT,
             entry_source TEXT,
             device_id TEXT,
@@ -128,6 +131,14 @@ class LocalDbService {
           } catch (e) {
             // Ignore if column already exists
           }
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute('ALTER TABLE medical_records ADD COLUMN spo2 INTEGER');
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE medical_records ADD COLUMN respiratory_rate INTEGER');
+          } catch (_) {}
         }
         // Repair/sanitize any legacy oversized base64 images that caused CursorWindow errors
         try {
@@ -206,9 +217,17 @@ class LocalDbService {
     // Fetch state name
     String stateName = 'N/A';
     if (user['state'] != null && user['state'].toString().isNotEmpty) {
-      final stateMaps = await db.query('states', where: 'id = ?', whereArgs: [user['state']]);
-      if (stateMaps.isNotEmpty) {
-        stateName = stateMaps.first['name']?.toString() ?? 'N/A';
+      final stateVal = user['state'].toString();
+      final stateId = int.tryParse(stateVal);
+      if (stateId != null) {
+        final stateMaps = await db.query('states', where: 'id = ?', whereArgs: [stateId]);
+        if (stateMaps.isNotEmpty) {
+          stateName = stateMaps.first['name']?.toString() ?? stateVal;
+        } else {
+          stateName = stateVal;
+        }
+      } else {
+        stateName = stateVal;
       }
     }
 
@@ -419,6 +438,8 @@ class LocalDbService {
     int? bloodPressureDiastolic,
     double? temperature,
     int? pulseRate,
+    int? spo2,
+    int? respiratoryRate,
     String? notes,
     String entrySource = 'manual',
     String? deviceId,
@@ -434,6 +455,8 @@ class LocalDbService {
       'blood_pressure_diastolic': bloodPressureDiastolic,
       'temperature': temperature,
       'pulse_rate': pulseRate,
+      'spo2': spo2,
+      'respiratory_rate': respiratoryRate,
       'notes': notes,
       'entry_source': entrySource,
       'device_id': deviceId,
@@ -470,6 +493,33 @@ class LocalDbService {
       if (temp > 103) {
         isCritical = true;
       } else if (temp > 100.4) {
+        isWarning = true;
+      }
+    }
+
+    final pulse = r['pulse_rate'] as num?;
+    if (pulse != null) {
+      if (pulse > 130 || pulse < 40) {
+        isCritical = true;
+      } else if (pulse > 100 || pulse < 50) {
+        isWarning = true;
+      }
+    }
+
+    final spo2 = r['spo2'] as num?;
+    if (spo2 != null) {
+      if (spo2 < 92) {
+        isCritical = true;
+      } else if (spo2 < 95) {
+        isWarning = true;
+      }
+    }
+
+    final rr = r['respiratory_rate'] as num?;
+    if (rr != null) {
+      if (rr > 24 || rr < 8) {
+        isCritical = true;
+      } else if (rr > 20 || rr < 12) {
         isWarning = true;
       }
     }
@@ -589,6 +639,77 @@ class LocalDbService {
     return true;
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Seeding Logic
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  static Future<Map<String, int>> seedIndiaData() async {
+    final db = await database;
+    int statesAdded = 0;
+    int districtsAdded = 0;
+
+    await db.transaction((txn) async {
+      for (var stateName in IndiaData.statesAndDistricts.keys) {
+        // Check if state exists
+        final existingState = await txn.query('states', where: 'name = ?', whereArgs: [stateName]);
+        int stateId;
+        if (existingState.isEmpty) {
+          stateId = await txn.insert('states', {'name': stateName});
+          statesAdded++;
+        } else {
+          stateId = existingState.first['id'] as int;
+        }
+
+        final districts = IndiaData.statesAndDistricts[stateName]!;
+        for (var districtName in districts) {
+          // Check if district exists under this state
+          final existingDistrict = await txn.query(
+            'districts',
+            where: 'state_id = ? AND name = ?',
+            whereArgs: [stateId, districtName],
+          );
+          if (existingDistrict.isEmpty) {
+            await txn.insert('districts', {'state_id': stateId, 'name': districtName});
+            districtsAdded++;
+          }
+        }
+      }
+    });
+
+    return {'states': statesAdded, 'districts': districtsAdded};
+  }
+
+  static Future<Map<String, int>> getSystemStats() async {
+    final db = await database;
+    final statesCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM states')) ?? 0;
+    final districtsCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM districts')) ?? 0;
+    final areasCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM areas')) ?? 0;
+    final workersCount = Sqflite.firstIntValue(await db.rawQuery("SELECT COUNT(*) FROM users WHERE role = 'asha'")) ?? 0;
+    final familiesCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM families')) ?? 0;
+    final membersCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM members')) ?? 0;
+    final recordsCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM medical_records')) ?? 0;
+
+    return {
+      'states': statesCount,
+      'districts': districtsCount,
+      'areas': areasCount,
+      'workers': workersCount,
+      'families': familiesCount,
+      'members': membersCount,
+      'records': recordsCount,
+    };
+  }
+
+  static Future<void> clearAllJurisdictions() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('user_areas');
+      await txn.delete('areas');
+      await txn.delete('districts');
+      await txn.delete('states');
+    });
+  }
+
   static Future<List<dynamic>> getASHAWorkers(String token) async {
     final db = await database;
     final workers = await db.query('users', where: 'role = ?', whereArgs: ['asha'], orderBy: 'first_name ASC, last_name ASC');
@@ -606,9 +727,17 @@ class LocalDbService {
 
       String stateName = 'N/A';
       if (w['state'] != null && w['state'].toString().isNotEmpty) {
-        final stateMaps = await db.query('states', where: 'id = ?', whereArgs: [w['state']]);
-        if (stateMaps.isNotEmpty) {
-          stateName = stateMaps.first['name']?.toString() ?? 'N/A';
+        final stateVal = w['state'].toString();
+        final stateId = int.tryParse(stateVal);
+        if (stateId != null) {
+          final stateMaps = await db.query('states', where: 'id = ?', whereArgs: [stateId]);
+          if (stateMaps.isNotEmpty) {
+            stateName = stateMaps.first['name']?.toString() ?? stateVal;
+          } else {
+            stateName = stateVal;
+          }
+        } else {
+          stateName = stateVal;
         }
       }
 

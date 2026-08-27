@@ -1,0 +1,74 @@
+name: Build and Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Release Version Tag (e.g. v1.0.1)'
+        required: true
+        default: 'v1.0.1'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java Development Kit (JDK)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter Dependencies
+        run: |
+          cd flutter_app
+          flutter pub get
+
+      - name: Build Android Release APK
+        run: |
+          cd flutter_app
+          flutter build apk --release
+
+      - name: Determine Release Tag
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.version_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Release APK Asset to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: HealthVault ${{ steps.vars.outputs.tag }}
+          body: |
+            ## 📱 T7 HealthVault Release ${{ steps.vars.outputs.tag }}
+            
+            ### ✨ Highlights
+            - Latest APK release built automatically by GitHub Actions CI/CD.
+            - Direct in-app auto-update supported.
+            
+            ### 📥 Download
+            - **[app-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/app-release.apk)**
+          files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

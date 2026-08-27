@@ -2,7 +2,7 @@
     <!-- Required for any HTTP/HTTPS network access -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="flutter_app"
+        android:label="T7 HealthVault"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
