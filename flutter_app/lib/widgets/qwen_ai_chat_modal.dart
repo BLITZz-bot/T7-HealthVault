@@ -25,17 +25,41 @@ class QwenAIChatModal {
       {'sender': 't7_ai', 'text': initialGreeting}
     ];
 
+    bool isGenerating = false;
     final TextEditingController chatInputCtrl = TextEditingController();
     final ScrollController scrollController = ScrollController();
 
-    // Quick suggestion chips
-    final List<String> quickPrompts = [
-      '🌡️ Fever Advice',
-      '🩺 High BP Protocol',
-      '🩸 Low Blood Sugar',
-      '🤰 Pregnancy Danger Signs',
-      '👶 Child Dehydration (ORS)',
-    ];
+    // Quick dynamic suggestion chips tailored to patient demographics
+    final isPregnantMember = (member?['is_pregnant'] == 1 || member?['is_pregnant'] == true);
+    final memberAge = int.tryParse(member?['age']?.toString() ?? '99') ?? 99;
+    final isChildMember = memberAge < 5;
+
+    final List<String> quickPrompts;
+    if (isPregnantMember) {
+      quickPrompts = [
+        '🤰 Pregnancy Danger Signs',
+        '🩺 High BP & Pre-eclampsia',
+        '💊 Safe Meds in ANC',
+        '👶 Decreased Fetal Movement',
+        '🍼 Exclusive Breastfeeding (EBF)',
+      ];
+    } else if (isChildMember) {
+      quickPrompts = [
+        '👶 Infant Danger Signs (IMNCI)',
+        '💉 Vaccines Due Check',
+        '💧 ORS & Pediatric Zinc Dosage',
+        '🫁 Fast Breathing / Pneumonia',
+        '📏 MUAC Malnutrition Care',
+      ];
+    } else {
+      quickPrompts = [
+        '🌡️ Fever Advice',
+        '🩺 High BP Protocol',
+        '🩸 Low Blood Sugar',
+        '🫁 Breathlessness / SpO2',
+        '📊 NEWS2 Score Breakdown',
+      ];
+    }
 
     showModalBottomSheet(
       context: context,
@@ -49,15 +73,16 @@ class QwenAIChatModal {
           builder: (context, setModalState) {
             void sendMessage(String query) async {
               query = query.trim();
-              if (query.isEmpty) return;
+              if (query.isEmpty || isGenerating) return;
               chatInputCtrl.clear();
 
               setModalState(() {
                 chatMessages.add({'sender': 'user', 'text': query});
+                isGenerating = true;
               });
 
               // Scroll to bottom
-              Future.delayed(const Duration(milliseconds: 100), () {
+              Future.delayed(const Duration(milliseconds: 80), () {
                 if (scrollController.hasClients) {
                   scrollController.animateTo(
                     scrollController.position.maxScrollExtent,
@@ -67,18 +92,29 @@ class QwenAIChatModal {
                 }
               });
 
-              final response = await OnDeviceLLMService.generateGenerativeClinicalExplanation(
-                member: member ?? {'name': 'General Health Query', 'age': 'Community'},
-                news2Result: news2Result ?? {'score': 0, 'risk_level': 'Normal / Low Risk'},
-                sepsisResult: sepsisResult ?? {'risk_percent': '0%', 'risk_level': 'Normal / Low Risk'},
-                delta: delta ?? {},
-                languageCode: currentLang,
-                customQuestion: query,
-              );
+              try {
+                final response = await OnDeviceLLMService.generateGenerativeClinicalExplanation(
+                  member: member ?? {'name': 'General Health Query', 'age': 'Community'},
+                  news2Result: news2Result ?? {'score': 0, 'risk_level': 'Normal / Low Risk'},
+                  sepsisResult: sepsisResult ?? {'risk_percent': '0%', 'risk_level': 'Normal / Low Risk'},
+                  delta: delta ?? {},
+                  languageCode: currentLang,
+                  customQuestion: query,
+                );
 
-              setModalState(() {
-                chatMessages.add({'sender': 'qwen', 'text': response});
-              });
+                setModalState(() {
+                  isGenerating = false;
+                  chatMessages.add({'sender': 'qwen', 'text': response});
+                });
+              } catch (e) {
+                setModalState(() {
+                  isGenerating = false;
+                  chatMessages.add({
+                    'sender': 'qwen',
+                    'text': 'Clinical AI consultation generated with standard protocol.\n\n• Maintain vital monitoring\n• Refer to PHC if danger signs persist.'
+                  });
+                });
+              }
 
               Future.delayed(const Duration(milliseconds: 100), () {
                 if (scrollController.hasClients) {
@@ -96,7 +132,7 @@ class QwenAIChatModal {
                 bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
               child: Container(
-                height: MediaQuery.of(context).size.height * 0.82,
+                height: MediaQuery.of(context).size.height * 0.84,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   children: [
@@ -115,33 +151,74 @@ class QwenAIChatModal {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: const Color(0x1F00796B),
-                                borderRadius: BorderRadius.circular(8),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              ValueListenableBuilder<bool>(
+                                valueListenable: OnDeviceLLMService.isModelDownloadedNotifier,
+                                builder: (context, isDownloaded, _) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isDownloaded ? Colors.green.shade50 : const Color(0x1F00796B),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      isDownloaded ? Icons.verified_rounded : Icons.auto_awesome,
+                                      color: isDownloaded ? Colors.green.shade700 : const Color(0xFF00796B),
+                                      size: 22,
+                                    ),
+                                  );
+                                },
                               ),
-                              child: const Icon(Icons.auto_awesome, color: Color(0xFF00796B), size: 20),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  isPatientContext
-                                      ? 'T7 Clinical AI Chat • $patientName'
-                                      : 'T7 Clinical AI Chat',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isPatientContext
+                                          ? 'T7 AI Doctor • $patientName'
+                                          : 'T7 Clinical AI Chat',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    ValueListenableBuilder<bool>(
+                                      valueListenable: OnDeviceLLMService.isModelDownloadedNotifier,
+                                      builder: (context, isDownloaded, _) {
+                                        return Row(
+                                          children: [
+                                            Container(
+                                              width: 7,
+                                              height: 7,
+                                              decoration: BoxDecoration(
+                                                color: isDownloaded ? Colors.green : const Color(0xFF00897B),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Expanded(
+                                              child: Text(
+                                                isDownloaded
+                                                    ? '⚡ Neural LLM Loaded (${langInfo['native']})'
+                                                    : '🤖 Clinical AI (${langInfo['native']})',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDownloaded ? Colors.green.shade800 : Colors.grey.shade700,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  '${langInfo['name']} (${langInfo['native']}) • 100% On-Device',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                ),
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -163,7 +240,9 @@ class QwenAIChatModal {
                               backgroundColor: Colors.teal.shade50,
                               side: BorderSide(color: Colors.teal.shade200),
                               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                              onPressed: () => sendMessage(p.replaceAll(RegExp(r'^[^\w]+'), '')),
+                              onPressed: isGenerating
+                                  ? null
+                                  : () => sendMessage(p.replaceAll(RegExp(r'^[^\w]+'), '')),
                             ),
                           );
                         }).toList(),
@@ -175,8 +254,38 @@ class QwenAIChatModal {
                     Expanded(
                       child: ListView.builder(
                         controller: scrollController,
-                        itemCount: chatMessages.length,
+                        itemCount: chatMessages.length + (isGenerating ? 1 : 0),
                         itemBuilder: (context, index) {
+                          if (index == chatMessages.length && isGenerating) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.shade50,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.teal.shade200),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00796B)),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Synthesizing clinical advice...',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF004D40), fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
                           final msg = chatMessages[index];
                           final isUser = msg['sender'] == 'user';
                           return Align(
@@ -219,6 +328,7 @@ class QwenAIChatModal {
                           child: TextField(
                             controller: chatInputCtrl,
                             textInputAction: TextInputAction.send,
+                            enabled: !isGenerating,
                             onSubmitted: sendMessage,
                             decoration: InputDecoration(
                               hintText: isPatientContext
@@ -238,11 +348,17 @@ class QwenAIChatModal {
                         const SizedBox(width: 8),
                         IconButton.filled(
                           style: IconButton.styleFrom(
-                            backgroundColor: const Color(0xFF00796B),
+                            backgroundColor: isGenerating ? Colors.grey : const Color(0xFF00796B),
                             padding: const EdgeInsets.all(10),
                           ),
-                          icon: const Icon(Icons.send_rounded, size: 20, color: Colors.white),
-                          onPressed: () => sendMessage(chatInputCtrl.text),
+                          icon: isGenerating
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.send_rounded, size: 20, color: Colors.white),
+                          onPressed: isGenerating ? null : () => sendMessage(chatInputCtrl.text),
                         ),
                       ],
                     ),

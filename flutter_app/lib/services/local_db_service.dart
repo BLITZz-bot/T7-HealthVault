@@ -14,11 +14,11 @@ class LocalDbService {
 
   static Future<Database> _initDB() async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'healthvault.db');
+    final path = join(dbPath, 'asha_records.db');
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE users(
@@ -27,10 +27,11 @@ class LocalDbService {
             password TEXT,
             first_name TEXT,
             last_name TEXT,
+            role TEXT,
             phone_number TEXT,
             aadhaar_number TEXT,
-            role TEXT,
             state TEXT,
+            district TEXT,
             profile_image TEXT
           )
         ''');
@@ -38,7 +39,7 @@ class LocalDbService {
         await db.execute('''
           CREATE TABLE states(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT
+            name TEXT UNIQUE
           )
         ''');
 
@@ -84,6 +85,23 @@ class LocalDbService {
             age INTEGER,
             gender TEXT,
             relationship_to_head TEXT,
+            abha_id TEXT,
+            mobile_number TEXT,
+            is_pregnant INTEGER DEFAULT 0,
+            lmp_date TEXT,
+            edd_date TEXT,
+            is_high_risk_pregnancy INTEGER DEFAULT 0,
+            is_lactating INTEGER DEFAULT 0,
+            td1_vaccine INTEGER DEFAULT 0,
+            td2_vaccine INTEGER DEFAULT 0,
+            td_booster INTEGER DEFAULT 0,
+            ifa_tablets_given INTEGER DEFAULT 0,
+            calcium_tablets_given INTEGER DEFAULT 0,
+            birth_weight REAL,
+            delivery_type TEXT,
+            muac_cm REAL,
+            has_chronic_condition INTEGER DEFAULT 0,
+            chronic_notes TEXT,
             profile_image TEXT
           )
         ''');
@@ -121,16 +139,12 @@ class LocalDbService {
         if (oldVersion < 2) {
           try {
             await db.execute('ALTER TABLE users ADD COLUMN profile_image TEXT');
-          } catch (e) {
-            // Ignore if column already exists
-          }
+          } catch (_) {}
         }
         if (oldVersion < 3) {
           try {
             await db.execute('ALTER TABLE members ADD COLUMN profile_image TEXT');
-          } catch (e) {
-            // Ignore if column already exists
-          }
+          } catch (_) {}
         }
         if (oldVersion < 4) {
           try {
@@ -139,6 +153,32 @@ class LocalDbService {
           try {
             await db.execute('ALTER TABLE medical_records ADD COLUMN respiratory_rate INTEGER');
           } catch (_) {}
+        }
+        if (oldVersion < 5) {
+          final newCols = [
+            'ALTER TABLE members ADD COLUMN abha_id TEXT',
+            'ALTER TABLE members ADD COLUMN mobile_number TEXT',
+            'ALTER TABLE members ADD COLUMN is_pregnant INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN lmp_date TEXT',
+            'ALTER TABLE members ADD COLUMN edd_date TEXT',
+            'ALTER TABLE members ADD COLUMN is_high_risk_pregnancy INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN is_lactating INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN td1_vaccine INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN td2_vaccine INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN td_booster INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN ifa_tablets_given INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN calcium_tablets_given INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN birth_weight REAL',
+            'ALTER TABLE members ADD COLUMN delivery_type TEXT',
+            'ALTER TABLE members ADD COLUMN muac_cm REAL',
+            'ALTER TABLE members ADD COLUMN has_chronic_condition INTEGER DEFAULT 0',
+            'ALTER TABLE members ADD COLUMN chronic_notes TEXT',
+          ];
+          for (var q in newCols) {
+            try {
+              await db.execute(q);
+            } catch (_) {}
+          }
         }
         // Repair/sanitize any legacy oversized base64 images that caused CursorWindow errors
         try {
@@ -333,6 +373,23 @@ class LocalDbService {
     String gender,
     String relationship, {
     String? profileImage,
+    String? abhaId,
+    String? mobileNumber,
+    bool isPregnant = false,
+    String? lmpDate,
+    String? eddDate,
+    bool isHighRiskPregnancy = false,
+    bool isLactating = false,
+    bool td1Vaccine = false,
+    bool td2Vaccine = false,
+    bool tdBooster = false,
+    int ifaTabletsGiven = 0,
+    int calciumTabletsGiven = 0,
+    double? birthWeight,
+    String? deliveryType,
+    double? muacCm,
+    bool hasChronicCondition = false,
+    String? chronicNotes,
   }) async {
     final db = await database;
     await db.insert('members', {
@@ -342,6 +399,23 @@ class LocalDbService {
       'gender': gender,
       'relationship_to_head': relationship,
       'profile_image': profileImage,
+      'abha_id': abhaId,
+      'mobile_number': mobileNumber,
+      'is_pregnant': isPregnant ? 1 : 0,
+      'lmp_date': lmpDate,
+      'edd_date': eddDate,
+      'is_high_risk_pregnancy': isHighRiskPregnancy ? 1 : 0,
+      'is_lactating': isLactating ? 1 : 0,
+      'td1_vaccine': td1Vaccine ? 1 : 0,
+      'td2_vaccine': td2Vaccine ? 1 : 0,
+      'td_booster': tdBooster ? 1 : 0,
+      'ifa_tablets_given': ifaTabletsGiven,
+      'calcium_tablets_given': calciumTabletsGiven,
+      'birth_weight': birthWeight,
+      'delivery_type': deliveryType,
+      'muac_cm': muacCm,
+      'has_chronic_condition': hasChronicCondition ? 1 : 0,
+      'chronic_notes': chronicNotes,
     });
     return true;
   }
@@ -354,6 +428,23 @@ class LocalDbService {
     required String gender,
     required String relationship,
     String? profileImage,
+    String? abhaId,
+    String? mobileNumber,
+    bool? isPregnant,
+    String? lmpDate,
+    String? eddDate,
+    bool? isHighRiskPregnancy,
+    bool? isLactating,
+    bool? td1Vaccine,
+    bool? td2Vaccine,
+    bool? tdBooster,
+    int? ifaTabletsGiven,
+    int? calciumTabletsGiven,
+    double? birthWeight,
+    String? deliveryType,
+    double? muacCm,
+    bool? hasChronicCondition,
+    String? chronicNotes,
   }) async {
     final db = await database;
     final Map<String, dynamic> values = {
@@ -362,9 +453,25 @@ class LocalDbService {
       'gender': gender,
       'relationship_to_head': relationship,
     };
-    if (profileImage != null) {
-      values['profile_image'] = profileImage;
-    }
+    if (profileImage != null) values['profile_image'] = profileImage;
+    if (abhaId != null) values['abha_id'] = abhaId;
+    if (mobileNumber != null) values['mobile_number'] = mobileNumber;
+    if (isPregnant != null) values['is_pregnant'] = isPregnant ? 1 : 0;
+    if (lmpDate != null) values['lmp_date'] = lmpDate;
+    if (eddDate != null) values['edd_date'] = eddDate;
+    if (isHighRiskPregnancy != null) values['is_high_risk_pregnancy'] = isHighRiskPregnancy ? 1 : 0;
+    if (isLactating != null) values['is_lactating'] = isLactating ? 1 : 0;
+    if (td1Vaccine != null) values['td1_vaccine'] = td1Vaccine ? 1 : 0;
+    if (td2Vaccine != null) values['td2_vaccine'] = td2Vaccine ? 1 : 0;
+    if (tdBooster != null) values['td_booster'] = tdBooster ? 1 : 0;
+    if (ifaTabletsGiven != null) values['ifa_tablets_given'] = ifaTabletsGiven;
+    if (calciumTabletsGiven != null) values['calcium_tablets_given'] = calciumTabletsGiven;
+    if (birthWeight != null) values['birth_weight'] = birthWeight;
+    if (deliveryType != null) values['delivery_type'] = deliveryType;
+    if (muacCm != null) values['muac_cm'] = muacCm;
+    if (hasChronicCondition != null) values['has_chronic_condition'] = hasChronicCondition ? 1 : 0;
+    if (chronicNotes != null) values['chronic_notes'] = chronicNotes;
+
     await db.update('members', values, where: 'id = ?', whereArgs: [int.parse(memberId)]);
     return true;
   }
