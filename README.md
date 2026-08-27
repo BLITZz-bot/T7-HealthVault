@@ -2,6 +2,7 @@
 
 [![Download Latest APK](https://img.shields.io/badge/Download-Latest%20Release%20APK-00796B?style=for-the-badge&logo=android&logoColor=white)](https://github.com/BLITZz-bot/T7-HealthVault/releases/latest/download/app-release.apk)
 [![GitHub Release](https://img.shields.io/github/v/release/BLITZz-bot/T7-HealthVault?style=for-the-badge&color=teal)](https://github.com/BLITZz-bot/T7-HealthVault/releases/latest)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary%20%2F%20All%20Rights%20Reserved-red.svg?style=for-the-badge)](LICENSE)
 
 **Developer & Author:** M M Bharath  
 **Version:** 1.0.0 (Clinical Intelligence & Multilingual Edition)  
@@ -314,12 +315,18 @@ flutter analyze     # 0 issues found
 flutter test        # 100% tests passed
 ```
 
-### 2. Build Release APK
+### 2. Build Secured Release APK (Obfuscated & Minified)
+For production builds, code obfuscation and debug info stripping are enabled to protect intellectual property from decompilation:
+
 ```bash
-flutter build apk --release
+cd flutter_app
+# Windows (PowerShell/CMD)
+.\build_secured_release.bat
+# Or manual command
+flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
 ```
 * **Output Path:** `flutter_app/build/app/outputs/flutter-apk/app-release.apk`
-* **Size:** **81.0 MB** (84,965,395 bytes)
+* **Isolated Symbol Maps:** `flutter_app/build/app/outputs/symbols/` (kept secure & git-ignored)
 
 ### 3. Retrain the Sepsis ONNX Model (Optional)
 ```bash
@@ -336,3 +343,13 @@ python train_and_export.py
 * **Clinical Training Data:** PhysioNet / Computing in Cardiology Challenge 2019 (CC BY 4.0)
 * **Clinical Protocol Standards:** UK Royal College of Physicians (NEWS2)
 * **Generative Language Model:** Alibaba Cloud Qwen Team (Qwen2.5-1.5B-Instruct)
+
+---
+
+## ⚖️ License & Copyright
+
+**Copyright © 2026 M M Bharath / T7 HealthVault. All Rights Reserved.**
+
+This software, including its source code, machine learning pipelines, trained models, database schemas, and documentation, is **PROPRIETARY and CONFIDENTIAL**. 
+
+No part of this software may be reproduced, distributed, decompiled, reverse-engineered, or transmitted in any form or by any means without the prior written permission of the copyright holder. See the [LICENSE](LICENSE) file for complete terms.

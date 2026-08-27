@@ -1,0 +1,69 @@
+PROPRIETARY AND CONFIDENTIAL SOFTWARE LICENSE AGREEMENT
+=========================================================
+
+Copyright (c) 2026 M M Bharath / T7 HealthVault. All Rights Reserved.
+
+IMPORTANT: PLEASE READ THIS LICENSE CAREFULLY BEFORE ACCESSING, USING, OR 
+INSTALLING THE T7 HEALTHVAULT SOFTWARE.
+
+1. OWNERSHIP AND INTELLECTUAL PROPERTY
+--------------------------------------
+This software, including but not limited to its source code, compiled binaries,
+object code, machine learning pipelines, trained models (.onnx, .gguf, .tflite),
+clinical algorithms (NEWS2/DELTA extensions), database schemas, user interfaces,
+documentation, graphical assets, and multilingual datasets (collectively referred 
+to as "the Software"), is the exclusive intellectual property and trade secret of 
+M M Bharath / T7 HealthVault ("the Author / Licensor").
+
+The Software is protected by copyright laws, international copyright treaties, 
+trade secret laws, and other intellectual property legislation.
+
+2. GRANT OF LICENSE & RESTRICTIONS
+----------------------------------
+This Software is strictly PROPRIETARY and CONFIDENTIAL. No license, express or 
+implied, is granted to any person or organization to copy, distribute, modify, 
+publicly display, sublicense, rent, lease, or commercially exploit this Software, 
+except under an explicit, signed, written commercial agreement with the Licensor.
+
+Under this license, YOU ARE STRICTLY PROHIBITED FROM:
+a) Copying, distributing, sharing, or transmitting any part of this software 
+   or source code to third parties without prior written consent.
+b) Reverse engineering, decompiling, disassembling, translating, unpacking, 
+   or attempting to derive the source code or underlying algorithms of compiled 
+   binaries, models, or packages.
+c) Modifying, adapting, altering, translating, or creating derivative works based 
+   upon the Software or any portion thereof.
+d) Removing, obscuring, or altering any copyright notices, trademarks, or proprietary 
+   legends embedded within the Software or documentation.
+e) Using the Software, its machine learning pipelines, or trained models to train, 
+   benchmark, or develop competing commercial products or services.
+
+3. CONFIDENTIALITY
+------------------
+The source code, architecture, and proprietary algorithms contained in this repository 
+are confidential and constitute proprietary trade secrets of the Licensor. Anyone 
+granted authorized access to this repository or codebase agrees to maintain strict 
+confidentiality and prevent unauthorized disclosure.
+
+4. HEALTHCARE & CLINICAL DECISION SUPPORT DISCLAIMER
+----------------------------------------------------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
+PARTICULAR PURPOSE, CLINICAL ACCURACY, AND NON-INFRINGEMENT.
+
+T7 HealthVault is designed as a clinical decision support tool and reference system 
+for healthcare personnel. In no event shall the Author or Licensor be liable for 
+any medical decision, diagnosis, treatment, misinterpretation, injury, direct, 
+indirect, incidental, special, exemplary, or consequential damages arising in any 
+way out of the use of this Software.
+
+5. TERMINATION
+--------------
+Any violation of this License Agreement immediately terminates all permissions or 
+access granted. In such an event, you must immediately destroy all copies of the 
+Software, source code, and associated materials in your possession.
+
+---------------------------------------------------------
+For licensing inquiries, commercial partnerships, or custom enterprise deployments:
+Contact: M M Bharath (BLITZz-bot / T7 HealthVault)
+=========================================================
